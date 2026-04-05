@@ -229,6 +229,7 @@ fun ExperienceBioScreen(bio: String, onBioChange: (String) -> Unit, onNext: () -
 }
 
 // ─── Claude Setup Screen ──────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClaudeSetupScreen(
     apiKey: String, persona: ClaudePersona,

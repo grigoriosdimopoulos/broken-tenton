@@ -70,6 +70,7 @@ private fun SettingsItem(title: String, subtitle: String, icon: androidx.compose
 }
 
 // ─── Claude Persona Settings ──────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClaudePersonaScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
