@@ -265,9 +265,30 @@ class AutomationOrchestrator @Inject constructor(
         job: ScrapedJob,
         prefs: UserPreferences
     ): Boolean {
-        activityRepo.log(ActivityAction.EXTERNAL_URL_OPENED, "${job.title} at ${job.company}", job.url)
-        engine.navigateTo(job.url, 20_000)
-        delay(2000)
+        // If the job URL is a LinkedIn page, extract the real ATS apply URL first
+        var applyUrl = job.url
+        if (applyUrl.contains("linkedin.com")) {
+            engine.navigateTo(applyUrl, 15_000)
+            delay(1500)
+            val extractScript = jsLoader.load(ScriptRegistry.LINKEDIN_GET_EXTERNAL_URL)
+            val extracted = runCatching { engine.runJs("get_ext_url", extractScript, 8_000) }.getOrNull()
+            if (!extracted.isNullOrBlank() && extracted.startsWith("http") && !extracted.contains("linkedin.com")) {
+                applyUrl = extracted
+                log("Extracted external apply URL: $applyUrl")
+            } else {
+                log("Could not extract external URL from LinkedIn page, trying job.url directly")
+            }
+        }
+
+        activityRepo.log(ActivityAction.EXTERNAL_URL_OPENED, "${job.title} at ${job.company}", applyUrl)
+        // Enable apply mode to bypass URL allowlist for ATS navigation
+        engine.enableApplyMode()
+        try {
+            engine.navigateTo(applyUrl, 20_000)
+            delay(2000)
+        } finally {
+            engine.disableApplyMode()
+        }
 
         val script = jsLoader.load(ScriptRegistry.EXTERNAL_APPLY_DETECT)
         val result = engine.runJs("external_detect", script, 10_000)
@@ -356,25 +377,46 @@ class AutomationOrchestrator @Inject constructor(
         fields.forEach { field ->
             val label = ((field["label"] as? String) ?: "").lowercase()
             val id = field["id"] as? String ?: ""
-            val name = field["name"] as? String ?: ""
+            val name = ((field["name"] as? String) ?: "").lowercase()
             val type = field["type"] as? String ?: "text"
 
             val value = when {
-                label.contains("first name") || name.contains("first_name") || name.contains("firstname") ->
-                    prefs.linkedInEmail.substringBefore("@").replaceFirstChar { it.uppercase() }
-                label.contains("last name") || name.contains("last_name") || name.contains("lastname") -> ""
-                label.contains("email") || type == "email" -> prefs.linkedInEmail
-                label.contains("phone") || type == "tel" -> ""
-                label.contains("linkedin") -> "https://www.linkedin.com"
+                label.contains("first name") || name.contains("first_name") || name.contains("firstname") || name == "first" ->
+                    prefs.firstName
+                label.contains("last name") || name.contains("last_name") || name.contains("lastname") || name == "last" ->
+                    prefs.lastName
+                label.contains("full name") || name.contains("full_name") || name.contains("fullname") ->
+                    "${prefs.firstName} ${prefs.lastName}".trim()
+                label.contains("email") || type == "email" || name.contains("email") ->
+                    prefs.linkedInEmail
+                label.contains("phone") || type == "tel" || name.contains("phone") || name.contains("mobile") ->
+                    prefs.phone
+                label.contains("city") || name.contains("city") ->
+                    prefs.city
+                label.contains("country") || name.contains("country") ->
+                    prefs.country
+                (label.contains("linkedin") || name.contains("linkedin")) && !label.contains("email") ->
+                    prefs.linkedInUrl
+                label.contains("current title") || label.contains("job title") || name.contains("title") ->
+                    prefs.currentJobTitle
+                label.contains("years") && label.contains("experience") ->
+                    prefs.yearsOfExperience.toString()
                 label.contains("website") || label.contains("portfolio") -> ""
                 else -> null
             } ?: return@forEach
 
-            val selector = if (id.isNotBlank()) "#$id" else "[name='$name']"
+            if (value.isBlank()) return@forEach
+
+            val selector = when {
+                id.isNotBlank() -> "#${id.replace("\"", "\\\"")}"
+                name.isNotBlank() -> "[name='${name.replace("'", "\\'")}']"
+                else -> return@forEach
+            }
+            val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
             val script = """
                 (function(){
                   var el = document.querySelector("$selector");
-                  if(el){ el.value="${value.replace("\"", "\\\"")}";
+                  if(el){ el.value="$escaped";
                     el.dispatchEvent(new Event('input',{bubbles:true}));
                     el.dispatchEvent(new Event('change',{bubbles:true}));
                   }

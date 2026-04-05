@@ -30,4 +30,13 @@ message UserPreferencesProto {
     string persona_style_notes = 23;
     repeated string persona_avoid_phrases = 24;
     string persona_custom_instructions = 25;
+    // Personal info for application form auto-fill
+    string first_name = 26;
+    string last_name = 27;
+    string phone = 28;
+    string city = 29;
+    string country = 30;
+    string linked_in_url = 31;
+    string current_job_title = 32;
+    int32 years_of_experience = 33;
 }

@@ -75,7 +75,15 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         resumeFileName = resumeFileName,
         automationEnabled = automationEnabled,
         requireApproval = requireApproval,
-        scanIntervalMinutes = if (scanIntervalMinutes > 0) scanIntervalMinutes else 30
+        scanIntervalMinutes = if (scanIntervalMinutes > 0) scanIntervalMinutes else 30,
+        firstName = firstName,
+        lastName = lastName,
+        phone = phone,
+        city = city,
+        country = country,
+        linkedInUrl = linkedInUrl,
+        currentJobTitle = currentJobTitle,
+        yearsOfExperience = yearsOfExperience
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -105,5 +113,13 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setAutomationEnabled(automationEnabled)
             .setRequireApproval(requireApproval)
             .setScanIntervalMinutes(scanIntervalMinutes)
+            .setFirstName(firstName)
+            .setLastName(lastName)
+            .setPhone(phone)
+            .setCity(city)
+            .setCountry(country)
+            .setLinkedInUrl(linkedInUrl)
+            .setCurrentJobTitle(currentJobTitle)
+            .setYearsOfExperience(yearsOfExperience)
             .build()
 }

@@ -23,6 +23,12 @@ class AutomationWebEngine(
     private val pendingErrors = ConcurrentHashMap<String, (String) -> Unit>()
     private var pageLoadedCallback: ((String) -> Unit)? = null
 
+    // When true, bypasses URL allowlist so we can navigate to any ATS domain
+    @Volatile private var applyModeEnabled = false
+
+    fun enableApplyMode() { applyModeEnabled = true }
+    fun disableApplyMode() { applyModeEnabled = false }
+
     val currentUrl: String? get() = webView?.url
 
     fun create() {
@@ -61,6 +67,8 @@ class AutomationWebEngine(
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
+                // During apply mode, allow navigation to any external ATS URL
+                if (applyModeEnabled) return false
                 if (!UrlAllowlist.isAllowed(url, sourceMode)) {
                     if (UrlAllowlist.isBlockedLinkedInUrl(url)) {
                         bridge.log("Blocked navigation to: $url")

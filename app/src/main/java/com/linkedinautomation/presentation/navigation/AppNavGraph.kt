@@ -101,7 +101,7 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                     password = prefs.linkedInPassword,
                     onEmailChange = { setupVm.setCredentials(it, prefs.linkedInPassword) },
                     onPasswordChange = { setupVm.setCredentials(prefs.linkedInEmail, it) },
-                    onNext = { navController.navigate(Screen.JobPreferences.route) }
+                    onNext = { navController.navigate(Screen.PersonalInfo.route) }
                 )
             }
             composable(Screen.JobBoardSelection.route) {
@@ -112,6 +112,23 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                         val current = prefs.selectedJobBoards.toMutableList()
                         if (current.contains(board)) current.remove(board) else current.add(board)
                         setupVm.setSelectedJobBoards(current)
+                    },
+                    onNext = { navController.navigate(Screen.PersonalInfo.route) }
+                )
+            }
+            composable(Screen.PersonalInfo.route) {
+                val prefs by setupVm.prefs.collectAsState()
+                PersonalInfoScreen(
+                    firstName = prefs.firstName,
+                    lastName = prefs.lastName,
+                    phone = prefs.phone,
+                    city = prefs.city,
+                    country = prefs.country,
+                    linkedInUrl = prefs.linkedInUrl,
+                    currentJobTitle = prefs.currentJobTitle,
+                    yearsOfExperience = prefs.yearsOfExperience,
+                    onSave = { fn, ln, ph, ct, co, li, jt, yoe ->
+                        setupVm.setPersonalInfo(fn, ln, ph, ct, co, li, jt, yoe)
                     },
                     onNext = { navController.navigate(Screen.JobPreferences.route) }
                 )

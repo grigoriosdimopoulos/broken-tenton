@@ -12,4 +12,5 @@ object ScriptRegistry {
     const val ZIPRECRUITER_SCAN = "js/ziprecruiter_scan.js"
     const val MONSTER_SCAN = "js/monster_scan.js"
     const val EXTERNAL_APPLY_DETECT = "js/external_apply_detect.js"
+    const val LINKEDIN_GET_EXTERNAL_URL = "js/linkedin_get_external_url.js"
 }

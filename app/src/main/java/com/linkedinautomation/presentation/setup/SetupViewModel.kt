@@ -60,6 +60,23 @@ class SetupViewModel @Inject constructor(
         _prefs.value = _prefs.value.copy(excludeKeywords = keywords, excludeCompanies = companies)
     }
 
+    fun setPersonalInfo(
+        firstName: String, lastName: String, phone: String,
+        city: String, country: String, linkedInUrl: String,
+        currentJobTitle: String, yearsOfExperience: Int
+    ) {
+        _prefs.value = _prefs.value.copy(
+            firstName = firstName,
+            lastName = lastName,
+            phone = phone,
+            city = city,
+            country = country,
+            linkedInUrl = linkedInUrl,
+            currentJobTitle = currentJobTitle,
+            yearsOfExperience = yearsOfExperience
+        )
+    }
+
     fun setExperienceBio(bio: String) {
         _prefs.value = _prefs.value.copy(experienceBio = bio)
     }

@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     object SourceMode : Screen("setup/source_mode")
     object Credentials : Screen("setup/credentials")
     object JobBoardSelection : Screen("setup/job_boards")
+    object PersonalInfo : Screen("setup/personal_info")
     object JobPreferences : Screen("setup/job_preferences")
     object Exclusions : Screen("setup/exclusions")
     object ExperienceBio : Screen("setup/experience_bio")

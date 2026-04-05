@@ -30,5 +30,14 @@ data class UserPreferences(
     // Automation settings
     val automationEnabled: Boolean = false,
     val requireApproval: Boolean = false,
-    val scanIntervalMinutes: Int = 30
+    val scanIntervalMinutes: Int = 30,
+    // Personal info for application form auto-fill
+    val firstName: String = "",
+    val lastName: String = "",
+    val phone: String = "",
+    val city: String = "",
+    val country: String = "",
+    val linkedInUrl: String = "",
+    val currentJobTitle: String = "",
+    val yearsOfExperience: Int = 0
 )
