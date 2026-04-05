@@ -20,10 +20,25 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        // Debug signing config reused for CI release builds (no keystore needed)
+        create("debugSigning") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Use debug signing when no release keystore is configured (e.g. CI)
+            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (keystorePath == null) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -83,4 +98,11 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
+}
+
+// Convenience task for CI to print the versionName
+tasks.register("printVersionName") {
+    doLast {
+        println(android.defaultConfig.versionName)
+    }
 }
