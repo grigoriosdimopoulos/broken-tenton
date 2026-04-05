@@ -1,0 +1,109 @@
+package com.linkedinautomation.data.repository
+
+import android.content.Context
+import com.linkedinautomation.data.local.datastore.userPreferencesDataStore
+import com.linkedinautomation.domain.model.*
+import com.linkedinautomation.domain.repository.UserPreferencesRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class UserPreferencesRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context
+) : UserPreferencesRepository {
+
+    private val dataStore = context.userPreferencesDataStore
+
+    override fun observe(): Flow<UserPreferences> = dataStore.data.map { it.toDomain() }
+
+    override suspend fun get(): UserPreferences = dataStore.data.first().toDomain()
+
+    override suspend fun save(prefs: UserPreferences) {
+        dataStore.updateData { prefs.toProto() }
+    }
+
+    override suspend fun savePersona(persona: ClaudePersona) {
+        dataStore.updateData { current ->
+            current.toBuilder()
+                .setPersonaTone(persona.tone.name)
+                .setPersonaStyleNotes(persona.styleNotes)
+                .clearPersonaAvoidPhrases()
+                .addAllPersonaAvoidPhrases(persona.avoidPhrases)
+                .setPersonaCustomInstructions(persona.customInstructions)
+                .build()
+        }
+    }
+
+    override suspend fun setAutomationEnabled(enabled: Boolean) {
+        dataStore.updateData { it.toBuilder().setAutomationEnabled(enabled).build() }
+    }
+
+    override suspend fun setRequireApproval(requireApproval: Boolean) {
+        dataStore.updateData { it.toBuilder().setRequireApproval(requireApproval).build() }
+    }
+
+    private fun com.linkedinautomation.UserPreferencesProto.toDomain() = UserPreferences(
+        isSetupComplete = isSetupComplete,
+        sourceMode = if (sourceMode == "DIRECT") SourceMode.DIRECT else SourceMode.LINKEDIN,
+        linkedInEmail = linkedInEmail,
+        linkedInPassword = linkedInPassword,
+        selectedJobBoards = selectedJobBoardsList.mapNotNull { name ->
+            runCatching { JobBoardSource.valueOf(name) }.getOrNull()
+        }.ifEmpty { listOf(JobBoardSource.INDEED) },
+        jobKeywords = jobKeywordsList,
+        location = location,
+        remoteOnly = remoteOnly,
+        hybridOk = hybridOk,
+        onsiteOk = onsiteOk,
+        jobTypes = jobTypesList.ifEmpty { listOf("FULL_TIME") },
+        experienceLevels = experienceLevelsList.ifEmpty { listOf("MID_SENIOR") },
+        targetIndustries = targetIndustriesList,
+        excludeKeywords = excludeKeywordsList,
+        excludeCompanies = excludeCompaniesList,
+        experienceBio = experienceBio,
+        claudeApiKey = claudeApiKey,
+        claudePersona = ClaudePersona(
+            tone = runCatching { PersonaTone.valueOf(personaTone) }.getOrElse { PersonaTone.PROFESSIONAL },
+            styleNotes = personaStyleNotes,
+            avoidPhrases = personaAvoidPhrasesList,
+            customInstructions = personaCustomInstructions
+        ),
+        resumeFileName = resumeFileName,
+        automationEnabled = automationEnabled,
+        requireApproval = requireApproval,
+        scanIntervalMinutes = if (scanIntervalMinutes > 0) scanIntervalMinutes else 30
+    )
+
+    private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
+        com.linkedinautomation.UserPreferencesProto.newBuilder()
+            .setIsSetupComplete(isSetupComplete)
+            .setSourceMode(sourceMode.name)
+            .setLinkedInEmail(linkedInEmail)
+            .setLinkedInPassword(linkedInPassword)
+            .addAllSelectedJobBoards(selectedJobBoards.map { it.name })
+            .addAllJobKeywords(jobKeywords)
+            .setLocation(location)
+            .setRemoteOnly(remoteOnly)
+            .setHybridOk(hybridOk)
+            .setOnsiteOk(onsiteOk)
+            .addAllJobTypes(jobTypes)
+            .addAllExperienceLevels(experienceLevels)
+            .addAllTargetIndustries(targetIndustries)
+            .addAllExcludeKeywords(excludeKeywords)
+            .addAllExcludeCompanies(excludeCompanies)
+            .setExperienceBio(experienceBio)
+            .setClaudeApiKey(claudeApiKey)
+            .setPersonaTone(claudePersona.tone.name)
+            .setPersonaStyleNotes(claudePersona.styleNotes)
+            .addAllPersonaAvoidPhrases(claudePersona.avoidPhrases)
+            .setPersonaCustomInstructions(claudePersona.customInstructions)
+            .setResumeFileName(resumeFileName)
+            .setAutomationEnabled(automationEnabled)
+            .setRequireApproval(requireApproval)
+            .setScanIntervalMinutes(scanIntervalMinutes)
+            .build()
+}

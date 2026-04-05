@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Job Automator</string>
+    <string name="notification_channel_automation">Automation Status</string>
+    <string name="notification_channel_applied">Job Applications</string>
+    <string name="notification_channel_approval">Pending Approvals</string>
+</resources>

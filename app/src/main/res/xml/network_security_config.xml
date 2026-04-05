@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">linkedin.com</domain>
+        <domain includeSubdomains="true">indeed.com</domain>
+        <domain includeSubdomains="true">glassdoor.com</domain>
+        <domain includeSubdomains="true">ziprecruiter.com</domain>
+        <domain includeSubdomains="true">monster.com</domain>
+        <domain includeSubdomains="true">simplyhired.com</domain>
+        <domain includeSubdomains="true">greenhouse.io</domain>
+        <domain includeSubdomains="true">lever.co</domain>
+        <domain includeSubdomains="true">workday.com</domain>
+        <domain includeSubdomains="true">myworkdayjobs.com</domain>
+        <domain includeSubdomains="true">taleo.net</domain>
+        <domain includeSubdomains="true">bamboohr.com</domain>
+        <domain includeSubdomains="true">icims.com</domain>
+        <domain includeSubdomains="true">smartrecruiters.com</domain>
+        <domain includeSubdomains="true">jobvite.com</domain>
+        <domain includeSubdomains="true">successfactors.com</domain>
+        <domain includeSubdomains="true">api.anthropic.com</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option java_package = "com.linkedinautomation";
+option java_multiple_files = true;
+
+message UserPreferencesProto {
+    bool is_setup_complete = 1;
+    string source_mode = 2;
+    string linked_in_email = 3;
+    string linked_in_password = 4;
+    repeated string selected_job_boards = 5;
+    repeated string job_keywords = 6;
+    string location = 7;
+    bool remote_only = 8;
+    bool hybrid_ok = 9;
+    bool onsite_ok = 10;
+    repeated string job_types = 11;
+    repeated string experience_levels = 12;
+    repeated string target_industries = 13;
+    repeated string exclude_keywords = 14;
+    repeated string exclude_companies = 15;
+    string experience_bio = 16;
+    string claude_api_key = 17;
+    string resume_file_name = 18;
+    bool automation_enabled = 19;
+    bool require_approval = 20;
+    int32 scan_interval_minutes = 21;
+    // Claude persona
+    string persona_tone = 22;
+    string persona_style_notes = 23;
+    repeated string persona_avoid_phrases = 24;
+    string persona_custom_instructions = 25;
+}
