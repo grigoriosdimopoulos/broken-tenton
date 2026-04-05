@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Briefcase icon centered in the safe zone (within 72dp centered) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,38 L44,34 C44,31.8 45.8,30 48,30 L60,30 C62.2,30 64,31.8 64,34 L64,38 L70,38 C72.2,38 74,39.8 74,42 L74,68 C74,70.2 72.2,72 70,72 L38,72 C35.8,72 34,70.2 34,68 L34,42 C34,39.8 35.8,38 38,38 Z M48,38 L60,38 L60,34 L48,34 Z M38,50 L38,68 L70,68 L70,50 Z M38,42 L70,42 L70,46 L38,46 Z"/>
+</vector>

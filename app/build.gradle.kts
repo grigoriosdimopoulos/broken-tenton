@@ -20,25 +20,12 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
-    signingConfigs {
-        // Debug signing config reused for CI release builds (no keystore needed)
-        create("debugSigning") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Use debug signing when no release keystore is configured (e.g. CI)
-            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
-            if (keystorePath == null) {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            // Use AGP's built-in debug signing for CI; set RELEASE_KEYSTORE_PATH for production
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
