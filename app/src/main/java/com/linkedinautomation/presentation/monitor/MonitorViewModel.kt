@@ -38,4 +38,11 @@ class MonitorViewModel @Inject constructor(
     fun setRequireApproval(require: Boolean) {
         viewModelScope.launch { prefsRepo.setRequireApproval(require) }
     }
+
+    /** Emergency stop: pause orchestrator + cancel all scheduled work */
+    fun stopAll() {
+        orchestrator.pause()
+        workScheduler.cancel()
+        viewModelScope.launch { prefsRepo.setAutomationEnabled(false) }
+    }
 }

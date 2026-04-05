@@ -1,11 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Broken Tenton logo: a thumbs-up with a crack/break through it -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Briefcase icon centered in the safe zone (within 72dp centered) -->
+
+    <!-- Thumb body (thumbs-up shape) in pink -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M44,38 L44,34 C44,31.8 45.8,30 48,30 L60,30 C62.2,30 64,31.8 64,34 L64,38 L70,38 C72.2,38 74,39.8 74,42 L74,68 C74,70.2 72.2,72 70,72 L38,72 C35.8,72 34,70.2 34,68 L34,42 C34,39.8 35.8,38 38,38 Z M48,38 L60,38 L60,34 L48,34 Z M38,50 L38,68 L70,68 L70,50 Z M38,42 L70,42 L70,46 L38,46 Z"/>
+        android:fillColor="#E91E63"
+        android:pathData="
+M54,28
+C54,28 46,32 44,40
+L44,52
+L38,52
+C35.8,52 34,53.8 34,56
+L34,74
+C34,76.2 35.8,78 38,78
+L66,78
+C68.2,78 70,76.2 70,74
+L70,72
+C72,71 74,68 74,64
+L74,48
+C74,44 71,40 67,40
+L60,40
+L60,36
+C60,31.6 57.4,28 54,28Z" />
+
+    <!-- Crack line across the thumb — red zigzag break -->
+    <path
+        android:strokeColor="#FF1744"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M42,50 L50,44 L55,52 L63,43 L70,49" />
+
+    <!-- Dark gap to show the break -->
+    <path
+        android:strokeColor="#0D0D0D"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M44,48 L52,42 L57,50 L65,41 L70,47" />
+
+    <!-- Finger ridges on the base (white semi-transparent) -->
+    <path
+        android:fillColor="#4DFFFFFF"
+        android:pathData="M38,56 L38,60 L66,60 L66,56 Z" />
+    <path
+        android:fillColor="#33FFFFFF"
+        android:pathData="M38,62 L38,66 L66,66 L66,62 Z" />
+    <path
+        android:fillColor="#1AFFFFFF"
+        android:pathData="M38,68 L38,72 L66,72 L66,68 Z" />
 </vector>

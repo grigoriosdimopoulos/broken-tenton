@@ -4,26 +4,42 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val Primary = Color(0xFF0A66C2)
-private val OnPrimary = Color.White
-private val Secondary = Color(0xFF057642)
-private val Background = Color(0xFFF3F2EF)
-private val Surface = Color.White
-private val Error = Color(0xFFB00020)
+// Broken Tenton — dark, pink & red palette
+private val PinkPrimary    = Color(0xFFE91E63)   // Material Pink 500
+private val PinkLight      = Color(0xFFF06292)   // Pink 300
+private val RedAccent      = Color(0xFFFF1744)   // Red A400
+private val BlackBg        = Color(0xFF0D0D0D)
+private val DarkSurface    = Color(0xFF1C1C1E)
+private val DarkSurface2   = Color(0xFF2A2A2E)
+private val OnDark         = Color(0xFFF5F5F5)
+private val OnDarkVariant  = Color(0xFFB0B0B8)
 
-private val LightColorScheme = lightColorScheme(
-    primary = Primary,
-    onPrimary = OnPrimary,
-    secondary = Secondary,
-    background = Background,
-    surface = Surface,
-    error = Error
+private val DarkColorScheme = darkColorScheme(
+    primary             = PinkPrimary,
+    onPrimary           = Color.White,
+    primaryContainer    = Color(0xFF880E4F),
+    onPrimaryContainer  = Color(0xFFFCE4EC),
+    secondary           = RedAccent,
+    onSecondary         = Color.White,
+    secondaryContainer  = Color(0xFF7F0000),
+    onSecondaryContainer = Color(0xFFFFCDD2),
+    tertiary            = PinkLight,
+    onTertiary          = Color.Black,
+    background          = BlackBg,
+    onBackground        = OnDark,
+    surface             = DarkSurface,
+    onSurface           = OnDark,
+    surfaceVariant      = DarkSurface2,
+    onSurfaceVariant    = OnDarkVariant,
+    outline             = Color(0xFF4A4A55),
+    error               = RedAccent,
+    onError             = Color.White
 )
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = LightColorScheme,
+        colorScheme = DarkColorScheme,
         content = content
     )
 }

@@ -23,4 +23,9 @@ sealed class Screen(val route: String) {
 
     // Settings sub-screens
     object ClaudePersona : Screen("settings/claude_persona")
+
+    // Application detail
+    object ApplicationDetail : Screen("application/{appId}") {
+        fun route(appId: Long) = "application/$appId"
+    }
 }

@@ -14,7 +14,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
+fun HistoryScreen(
+    onApplicationClick: (Long) -> Unit = {},
+    viewModel: HistoryViewModel = hiltViewModel()
+) {
     val tabs = listOf("Applications", "Activity", "Claude AI")
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -34,7 +37,7 @@ fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
         }
 
         when (selectedTab) {
-            0 -> ApplicationsTab(applications)
+            0 -> ApplicationsTab(applications, onApplicationClick)
             1 -> ActivityTab(activityLogs)
             2 -> ClaudeAiTab(claudeLogs, totalTokens)
         }
@@ -42,13 +45,16 @@ fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun ApplicationsTab(apps: List<com.linkedinautomation.domain.model.JobApplication>) {
+private fun ApplicationsTab(
+    apps: List<com.linkedinautomation.domain.model.JobApplication>,
+    onApplicationClick: (Long) -> Unit
+) {
     if (apps.isEmpty()) {
         EmptyState("No applications yet")
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(apps, key = { it.id }) { app ->
-                JobApplicationCard(app)
+                JobApplicationCard(app, onClick = { onApplicationClick(app.id) })
             }
         }
     }

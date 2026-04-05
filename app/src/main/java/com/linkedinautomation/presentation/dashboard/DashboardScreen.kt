@@ -1,14 +1,19 @@
 package com.linkedinautomation.presentation.dashboard
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.linkedinautomation.domain.model.ApplicationStatus
 import com.linkedinautomation.domain.model.JobApplication
 import com.linkedinautomation.presentation.components.StatusBadge
 import com.linkedinautomation.presentation.components.StatsCard
@@ -16,7 +21,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(
+    onApplicationClick: (Long) -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
     val totalApplied by viewModel.totalApplied.collectAsState(0)
     val pendingCount by viewModel.pendingCount.collectAsState(0)
     val thisWeekCount by viewModel.thisWeekCount.collectAsState(0)
@@ -52,16 +60,20 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             }
         } else {
             items(recentApps) { app ->
-                JobApplicationCard(app)
+                JobApplicationCard(app, onClick = { onApplicationClick(app.id) })
             }
         }
     }
 }
 
 @Composable
-fun JobApplicationCard(app: JobApplication) {
+fun JobApplicationCard(app: JobApplication, onClick: (() -> Unit)? = null) {
     val fmt = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -74,6 +86,24 @@ fun JobApplicationCard(app: JobApplication) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text(app.applicationType.displayName(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 Text(fmt.format(Date(app.appliedAt)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // Show error reason inline for failed applications
+            if (app.status == ApplicationStatus.FAILED && !app.errorMessage.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        app.errorMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

@@ -14,6 +14,9 @@ import com.linkedinautomation.presentation.approvalqueue.ApprovalQueueScreen
 import com.linkedinautomation.presentation.dashboard.DashboardScreen
 import com.linkedinautomation.presentation.history.HistoryScreen
 import com.linkedinautomation.presentation.monitor.MonitorScreen
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.linkedinautomation.presentation.applicationdetail.ApplicationDetailScreen
 import com.linkedinautomation.presentation.settings.SettingsViewModel
 import com.linkedinautomation.presentation.settings.screens.ClaudePersonaScreen
 import com.linkedinautomation.presentation.settings.screens.SettingsScreen
@@ -199,10 +202,18 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             }
 
             // ── Main Tabs ───────────────────────────────────────────────
-            composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Dashboard.route) {
+                DashboardScreen(onApplicationClick = { id ->
+                    navController.navigate(Screen.ApplicationDetail.route(id))
+                })
+            }
             composable(Screen.ApprovalQueue.route) { ApprovalQueueScreen() }
             composable(Screen.Monitor.route) { MonitorScreen() }
-            composable(Screen.History.route) { HistoryScreen() }
+            composable(Screen.History.route) {
+                HistoryScreen(onApplicationClick = { id ->
+                    navController.navigate(Screen.ApplicationDetail.route(id))
+                })
+            }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToPersona = { navController.navigate(Screen.ClaudePersona.route) },
@@ -215,6 +226,14 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             // ── Settings Sub-screens ────────────────────────────────────
             composable(Screen.ClaudePersona.route) {
                 ClaudePersonaScreen(onBack = { navController.popBackStack() })
+            }
+
+            // ── Application Detail ──────────────────────────────────────
+            composable(
+                route = Screen.ApplicationDetail.route,
+                arguments = listOf(navArgument("appId") { type = NavType.LongType })
+            ) {
+                ApplicationDetailScreen(onBack = { navController.popBackStack() })
             }
         }
     }

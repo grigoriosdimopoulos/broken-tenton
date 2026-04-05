@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,9 +27,27 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
     val logs by viewModel.liveLog.collectAsState()
     val prefs by viewModel.prefs.collectAsState(null)
     val listState = rememberLazyListState()
+    var showStopConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) listState.animateScrollToItem(0)
+    }
+
+    if (showStopConfirm) {
+        AlertDialog(
+            onDismissRequest = { showStopConfirm = false },
+            title = { Text("Stop Everything?") },
+            text = { Text("This will immediately halt all automation, cancel scheduled runs, and disable the automator. Nothing will be applied until you re-enable it.") },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.stopAll(); showStopConfirm = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("STOP ALL") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
 
     LazyColumn(
@@ -35,7 +55,24 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text("Monitor", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Monitor", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                // PANIC STOP BUTTON
+                Button(
+                    onClick = { showStopConfirm = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Stop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("STOP ALL", fontWeight = FontWeight.Bold)
+                }
+            }
             Spacer(Modifier.height(8.dp))
         }
 
@@ -70,9 +107,9 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
                     SectionHeader("CURRENT STATUS")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val (dot, text) = when (state) {
-                            is AutomationState.Running -> Color(0xFF057642) to (state as AutomationState.Running).message
+                            is AutomationState.Running -> MaterialTheme.colorScheme.primary to (state as AutomationState.Running).message
                             is AutomationState.Paused -> Color(0xFFE67E22) to "Paused"
-                            is AutomationState.Error -> Color(0xFFB00020) to (state as AutomationState.Error).message
+                            is AutomationState.Error -> MaterialTheme.colorScheme.error to (state as AutomationState.Error).message
                             else -> Color.Gray to "Idle — waiting for next scheduled run"
                         }
                         Box(modifier = Modifier.size(10.dp).background(dot, RoundedCornerShape(50)))
@@ -90,7 +127,7 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 400.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
             ) {
                 if (logs.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -103,7 +140,13 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         items(logs) { line ->
-                            Text(line, color = Color(0xFF00FF88), fontFamily = FontFamily.Monospace,
+                            val color = when {
+                                line.contains("error", ignoreCase = true) || line.contains("failed", ignoreCase = true) ||
+                                    line.contains("BLOCKED", ignoreCase = true) -> Color(0xFFFF1744)
+                                line.contains("Applied") || line.contains("success", ignoreCase = true) -> Color(0xFF00E676)
+                                else -> Color(0xFFE91E63)
+                            }
+                            Text(line, color = color, fontFamily = FontFamily.Monospace,
                                 style = MaterialTheme.typography.labelSmall)
                         }
                     }
