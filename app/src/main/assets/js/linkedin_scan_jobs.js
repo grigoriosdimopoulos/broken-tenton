@@ -20,8 +20,11 @@
     );
 
     jobCards.forEach(function(card) {
-      var jobId = card.getAttribute('data-job-id') ||
-                  (card.querySelector('[data-job-id]') || {}).getAttribute('data-job-id') || '';
+      var jobId = card.getAttribute('data-job-id') || '';
+      if (!jobId) {
+        var dataJobEl = card.querySelector('[data-job-id]');
+        if (dataJobEl) jobId = dataJobEl.getAttribute('data-job-id') || '';
+      }
 
       // Title: try most specific selector first, then fall back
       var titleEl = card.querySelector(
