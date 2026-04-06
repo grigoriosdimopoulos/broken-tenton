@@ -38,7 +38,7 @@ fun WelcomeScreen(onNext: () -> Unit) {
         Icon(Icons.Default.Work, contentDescription = null,
             modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(24.dp))
-        Text("Job Automator", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text("Broken Tenton", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
             "Apply to hundreds of jobs automatically. Set up once, never worry again.",

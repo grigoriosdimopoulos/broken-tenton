@@ -29,6 +29,34 @@ class AutomationWebEngine(
     fun enableApplyMode() { applyModeEnabled = true }
     fun disableApplyMode() { applyModeEnabled = false }
 
+    /**
+     * Runs [script] (expected to trigger a page navigation via click / window.location)
+     * and waits until [onPageFinished] fires for the new page.
+     * Apply mode is kept enabled for the whole duration so ATS redirects are allowed.
+     * Returns the final URL, or empty string on timeout / no navigation.
+     */
+    suspend fun runJsAndWaitForNavigation(script: String, timeoutMs: Long = 25_000): String {
+        enableApplyMode()
+        return try {
+            withTimeout(timeoutMs) {
+                suspendCancellableCoroutine { cont ->
+                    pageLoadedCallback = { url ->
+                        pageLoadedCallback = null
+                        if (!cont.isCompleted) cont.resume(url)
+                    }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        webView?.evaluateJavascript(script, null)
+                    }
+                    cont.invokeOnCancellation { pageLoadedCallback = null }
+                }
+            }
+        } catch (e: Exception) {
+            ""
+        } finally {
+            disableApplyMode()
+        }
+    }
+
     val currentUrl: String? get() = webView?.url
 
     fun create() {

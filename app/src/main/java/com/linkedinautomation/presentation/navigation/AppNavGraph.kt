@@ -18,8 +18,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.linkedinautomation.presentation.applicationdetail.ApplicationDetailScreen
 import com.linkedinautomation.presentation.settings.SettingsViewModel
-import com.linkedinautomation.presentation.settings.screens.ClaudePersonaScreen
-import com.linkedinautomation.presentation.settings.screens.SettingsScreen
+import com.linkedinautomation.presentation.settings.screens.*
 import com.linkedinautomation.presentation.setup.SetupViewModel
 import com.linkedinautomation.presentation.setup.screens.*
 
@@ -217,15 +216,28 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToPersona = { navController.navigate(Screen.ClaudePersona.route) },
-                    onNavigateToAccount = { /* TODO: account settings */ },
-                    onNavigateToJobPrefs = { /* TODO: job pref settings */ },
-                    onNavigateToResume = { /* TODO: resume settings */ }
+                    onNavigateToAccount = { navController.navigate(Screen.SettingsCredentials.route) },
+                    onNavigateToJobPrefs = { navController.navigate(Screen.SettingsJobPrefs.route) },
+                    onNavigateToResume = { navController.navigate(Screen.SettingsResume.route) },
+                    onNavigateToPersonalInfo = { navController.navigate(Screen.SettingsPersonalInfo.route) }
                 )
             }
 
             // ── Settings Sub-screens ────────────────────────────────────
             composable(Screen.ClaudePersona.route) {
                 ClaudePersonaScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsPersonalInfo.route) {
+                SettingsPersonalInfoScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsCredentials.route) {
+                SettingsCredentialsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsJobPrefs.route) {
+                SettingsJobPrefsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsResume.route) {
+                SettingsResumeScreen(onBack = { navController.popBackStack() })
             }
 
             // ── Application Detail ──────────────────────────────────────

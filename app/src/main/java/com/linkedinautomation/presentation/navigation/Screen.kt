@@ -23,6 +23,10 @@ sealed class Screen(val route: String) {
 
     // Settings sub-screens
     object ClaudePersona : Screen("settings/claude_persona")
+    object SettingsPersonalInfo : Screen("settings/personal_info")
+    object SettingsCredentials : Screen("settings/credentials")
+    object SettingsJobPrefs : Screen("settings/job_prefs")
+    object SettingsResume : Screen("settings/resume")
 
     // Application detail
     object ApplicationDetail : Screen("application/{appId}") {

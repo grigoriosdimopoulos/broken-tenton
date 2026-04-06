@@ -13,4 +13,5 @@ object ScriptRegistry {
     const val MONSTER_SCAN = "js/monster_scan.js"
     const val EXTERNAL_APPLY_DETECT = "js/external_apply_detect.js"
     const val LINKEDIN_GET_EXTERNAL_URL = "js/linkedin_get_external_url.js"
+    const val LINKEDIN_CLICK_APPLY = "js/linkedin_click_apply.js"
 }

@@ -265,69 +265,171 @@ class AutomationOrchestrator @Inject constructor(
         job: ScrapedJob,
         prefs: UserPreferences
     ): Boolean {
-        // If the job URL is a LinkedIn page, extract the real ATS apply URL first
-        var applyUrl = job.url
-        if (applyUrl.contains("linkedin.com")) {
-            engine.navigateTo(applyUrl, 15_000)
-            delay(1500)
-            val extractScript = jsLoader.load(ScriptRegistry.LINKEDIN_GET_EXTERNAL_URL)
-            val extracted = runCatching { engine.runJs("get_ext_url", extractScript, 8_000) }.getOrNull()
-            if (!extracted.isNullOrBlank() && extracted.startsWith("http") && !extracted.contains("linkedin.com")) {
-                applyUrl = extracted
-                log("Extracted external apply URL: $applyUrl")
-            } else {
-                log("Could not extract external URL from LinkedIn page, trying job.url directly")
+        activityRepo.log(ActivityAction.EXTERNAL_URL_OPENED, "${job.title} at ${job.company}", job.url)
+
+        var resolvedAtsUrl: String = if (!job.url.contains("linkedin.com")) job.url else ""
+
+        // Try up to 3 times with different navigation / submit strategies
+        for (attempt in 1..3) {
+            log("External apply attempt $attempt/3: ${job.title} @ ${job.company}")
+            try {
+                // ── Step 1: Resolve / navigate to the real ATS page ──────────────
+                when {
+                    !job.url.contains("linkedin.com") -> {
+                        // Already on ATS page from applyToJob navigation
+                        if (attempt > 1) delay(3000) // extra wait for SPA on re-attempts
+                    }
+                    attempt == 1 -> {
+                        // Click Apply button and follow redirect (apply mode stays on through redirect chain)
+                        log("Attempt 1: clicking Apply button to follow redirect...")
+                        val clickScript = jsLoader.load(ScriptRegistry.LINKEDIN_CLICK_APPLY)
+                        val navigatedUrl = engine.runJsAndWaitForNavigation(clickScript, 22_000)
+                        if (navigatedUrl.isNotBlank() && !navigatedUrl.contains("linkedin.com")) {
+                            resolvedAtsUrl = navigatedUrl
+                            delay(2000) // let SPA settle
+                        } else {
+                            log("Attempt 1: click did not navigate to ATS, falling through")
+                            continue // skip form fill for this attempt
+                        }
+                    }
+                    attempt == 2 -> {
+                        // Extract URL from page source and navigate directly
+                        log("Attempt 2: extracting ATS URL from page data...")
+                        if (!engine.currentUrl.orEmpty().contains("linkedin.com"))
+                            engine.navigateTo(job.url, 15_000)
+                        delay(1500)
+                        val extractScript = jsLoader.load(ScriptRegistry.LINKEDIN_GET_EXTERNAL_URL)
+                        val extracted = runCatching { engine.runJs("get_ext_url", extractScript, 8_000) }.getOrElse { "" }
+                        if (extracted.isNotBlank() && extracted.startsWith("http") && !extracted.contains("linkedin.com")) {
+                            resolvedAtsUrl = extracted
+                            engine.enableApplyMode()
+                            try { engine.navigateTo(extracted, 20_000) } finally { engine.disableApplyMode() }
+                            delay(3000) // SPAs need time to render
+                        } else if (resolvedAtsUrl.isBlank()) {
+                            log("Attempt 2: could not extract ATS URL"); continue
+                        } else {
+                            // Re-use URL from attempt 1 if we somehow ended up on ATS
+                            delay(3000)
+                        }
+                    }
+                    else -> {
+                        // Attempt 3: re-navigate to resolved URL with extra wait
+                        if (resolvedAtsUrl.isNotBlank() && !resolvedAtsUrl.contains("linkedin.com")) {
+                            engine.enableApplyMode()
+                            try { engine.navigateTo(resolvedAtsUrl, 20_000) } finally { engine.disableApplyMode() }
+                        }
+                        delay(5000) // heaviest wait — gives Workday/Angular time to load
+                    }
+                }
+
+                val currentAtsUrl = resolvedAtsUrl.ifBlank { engine.currentUrl ?: job.url }
+
+                // ── Step 2: Detect + fill form ────────────────────────────────────
+                val detectScript = jsLoader.load(ScriptRegistry.EXTERNAL_APPLY_DETECT)
+                val detectResult = runCatching { engine.runJs("ext_detect_$attempt", detectScript, 12_000) }.getOrElse { "{}" }
+                val data = parseJson(detectResult) ?: emptyMap<String, Any>()
+
+                @Suppress("UNCHECKED_CAST")
+                val fields = data["fields"] as? List<Map<String, Any>> ?: emptyList()
+                fillExternalFormFields(engine, fields, prefs)
+                fillScreeningQuestions(engine, job, prefs)
+                delay(600)
+                activityRepo.log(ActivityAction.RESUME_UPLOADED, "Resume provided for ${job.title}")
+
+                // ── Step 3: Submit with attempt-specific strategy ─────────────────
+                @Suppress("UNCHECKED_CAST")
+                val submitBtns = data["submitButtons"] as? List<Map<String, Any>> ?: emptyList()
+                val submitScript = buildExternalSubmitScript(submitBtns, attempt)
+                val submitResult = runCatching { engine.runJs("ext_submit_$attempt", submitScript, 10_000) }.getOrElse { "" }
+
+                if (submitResult.contains("clicked", ignoreCase = true) ||
+                    submitResult.contains("submit", ignoreCase = true)) {
+                    delay(2000)
+                    val atsName = UrlAllowlist.detectAtsName(currentAtsUrl)
+                    recordApplied(job, ApplicationType.External(atsName, currentAtsUrl))
+                    activityRepo.log(ActivityAction.APPLICATION_SUBMITTED, "${job.title} at ${job.company}", currentAtsUrl)
+                    log("Applied (External/$atsName) on attempt $attempt: ${job.title} @ ${job.company}")
+                    return true
+                }
+                log("Attempt $attempt submit result: $submitResult — retrying...")
+                delay(2000)
+
+            } catch (e: Exception) {
+                log("Attempt $attempt error: ${e.message}")
+                delay(2000)
             }
         }
 
-        activityRepo.log(ActivityAction.EXTERNAL_URL_OPENED, "${job.title} at ${job.company}", applyUrl)
-        // Enable apply mode to bypass URL allowlist for ATS navigation
-        engine.enableApplyMode()
-        try {
-            engine.navigateTo(applyUrl, 20_000)
-            delay(2000)
-        } finally {
-            engine.disableApplyMode()
-        }
-
-        val script = jsLoader.load(ScriptRegistry.EXTERNAL_APPLY_DETECT)
-        val result = engine.runJs("external_detect", script, 10_000)
-        val data = parseJson(result) ?: return false
-
-        @Suppress("UNCHECKED_CAST")
-        val fields = data["fields"] as? List<Map<String, Any>> ?: emptyList()
-        fillExternalFormFields(engine, fields, prefs)
-        fillScreeningQuestions(engine, job, prefs)
-        delay(500)
-
-        // Fill resume via file chooser (handled by engine callback)
-        activityRepo.log(ActivityAction.RESUME_UPLOADED, "Resume provided for ${job.title}")
-
-        // Click submit
-        @Suppress("UNCHECKED_CAST")
-        val submitBtns = data["submitButtons"] as? List<Map<String, Any>> ?: emptyList()
-        val submitScript = if (submitBtns.isNotEmpty()) {
-            val btnId = submitBtns.first()["id"] as? String ?: ""
-            if (btnId.isNotBlank()) {
-                "document.getElementById('$btnId')?.click(); AndroidBridge.onResult('ext_submit', 'clicked');"
-            } else {
-                "var btns = document.querySelectorAll('button[type=submit], input[type=submit]'); if(btns.length>0){btns[0].click(); AndroidBridge.onResult('ext_submit','clicked');}else{AndroidBridge.onError('ext_submit','No submit button');}"
-            }
-        } else {
-            "var btns = document.querySelectorAll('button[type=submit], input[type=submit]'); if(btns.length>0){btns[0].click(); AndroidBridge.onResult('ext_submit','clicked');}else{AndroidBridge.onError('ext_submit','No submit button');}"
-        }
-
-        val submitResult = engine.runJs("ext_submit", submitScript, 8_000)
-        if (submitResult.contains("clicked") || submitResult.contains("submit")) {
-            delay(2000)
-            val atsName = UrlAllowlist.detectAtsName(job.url)
-            recordApplied(job, ApplicationType.External(atsName, job.url))
-            activityRepo.log(ActivityAction.APPLICATION_SUBMITTED, "${job.title} at ${job.company}", job.url)
-            log("Applied (External/$atsName): ${job.title} @ ${job.company}")
-            return true
-        }
-        recordFailed(job, "External submit failed: $submitResult")
+        recordFailed(job, "External apply failed after 3 attempts — no submit button found on ATS page")
         return false
+    }
+
+    /** Builds an increasingly aggressive submit-button script for each attempt. */
+    private fun buildExternalSubmitScript(
+        submitBtns: List<Map<String, Any>>,
+        attempt: Int
+    ): String {
+        val firstId = (submitBtns.firstOrNull()?.get("id") as? String)?.takeIf { it.isNotBlank() }
+        val idClause = if (firstId != null)
+            "var byId = document.getElementById('${firstId.replace("'","\\'")}'); if(byId && byId.offsetParent!==null){ byId.click(); AndroidBridge.onResult('ext_submit_$attempt','clicked_id'); return; }"
+        else ""
+
+        return when (attempt) {
+            1 -> """
+                (function(){
+                  $idClause
+                  var s = document.querySelector('button[type=submit], input[type=submit]');
+                  if(s){ s.click(); AndroidBridge.onResult('ext_submit_1','clicked_std'); return; }
+                  AndroidBridge.onError('ext_submit_1','No submit button');
+                })();
+            """.trimIndent()
+
+            2 -> """
+                (function(){
+                  $idClause
+                  // Workday
+                  var wd = document.querySelector(
+                    '[data-automation-id="bottom-navigation-next-button"],' +
+                    '[data-automation-id="bottom-navigation-send-it-button"],' +
+                    '[data-automation-id="pageFooter"] button');
+                  if(wd){ wd.click(); AndroidBridge.onResult('ext_submit_2','clicked_workday'); return; }
+                  // Greenhouse / Lever / SmartRecruiters
+                  var ats = document.querySelector('#submit_app, #app-submit-btn, .btn-submit, [data-qa="btn-submit"], [data-testid="submit-app-button"]');
+                  if(ats){ ats.click(); AndroidBridge.onResult('ext_submit_2','clicked_ats'); return; }
+                  // type=submit
+                  var s = document.querySelector('[type=submit]');
+                  if(s){ s.click(); AndroidBridge.onResult('ext_submit_2','clicked_type'); return; }
+                  // Any button with submit/apply text
+                  var btns = Array.from(document.querySelectorAll('button')).filter(function(b){
+                    return /submit|apply|send/i.test(b.textContent) && b.offsetParent!==null && !b.disabled;
+                  });
+                  if(btns.length>0){ btns[0].click(); AndroidBridge.onResult('ext_submit_2','clicked_text'); return; }
+                  AndroidBridge.onError('ext_submit_2','No submit button attempt 2');
+                })();
+            """.trimIndent()
+
+            else -> """
+                (function(){
+                  $idClause
+                  // All previous strategies
+                  var sel = '[data-automation-id="bottom-navigation-next-button"],[data-automation-id="bottom-navigation-send-it-button"],' +
+                    '#submit_app,#app-submit-btn,.btn-submit,[type=submit],button[class*=submit],button[class*=apply]';
+                  var el = document.querySelector(sel);
+                  if(el){ el.click(); AndroidBridge.onResult('ext_submit_3','clicked_broad'); return; }
+                  // Any visible button with submit/apply/next/continue/send text
+                  var btns = Array.from(document.querySelectorAll('button')).filter(function(b){
+                    return /submit|apply|send|next|continue/i.test(b.textContent) && b.offsetParent!==null && !b.disabled;
+                  });
+                  if(btns.length>0){ btns[0].click(); AndroidBridge.onResult('ext_submit_3','clicked_any'); return; }
+                  // Last resort: form.submit()
+                  var forms = document.querySelectorAll('form');
+                  if(forms.length>0){
+                    try{ forms[forms.length-1].submit(); AndroidBridge.onResult('ext_submit_3','form_submit'); return; } catch(e){}
+                  }
+                  AndroidBridge.onError('ext_submit_3','Exhausted all submit strategies');
+                })();
+            """.trimIndent()
+        }
     }
 
     private suspend fun fillScreeningQuestions(

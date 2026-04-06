@@ -3,12 +3,13 @@
     var fields = [];
 
     var inputs = document.querySelectorAll(
-      'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=image]), select, textarea'
+      'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=image]),' +
+      'select, textarea'
     );
 
     inputs.forEach(function(input, idx) {
       var label = findLabel(input);
-      var fieldInfo = {
+      fields.push({
         idx: idx,
         tag: input.tagName.toLowerCase(),
         type: input.type || 'text',
@@ -17,29 +18,58 @@
         placeholder: input.placeholder || '',
         label: label,
         value: input.value || '',
-        required: input.required || false
-      };
-
-      if (input.tagName === 'SELECT') {
-        var options = [];
-        input.querySelectorAll('option').forEach(function(opt) {
-          if (opt.value) options.push({value: opt.value, text: opt.textContent.trim()});
-        });
-        fieldInfo.options = options;
-      }
-
-      fields.push(fieldInfo);
+        required: input.required || false,
+        options: input.tagName === 'SELECT'
+          ? Array.from(input.options).filter(o => o.value).map(o => ({value: o.value, text: o.textContent.trim()}))
+          : undefined
+      });
     });
 
+    // --- Submit button detection (ATS-aware) ---
     var submitBtns = [];
-    document.querySelectorAll('button[type=submit], input[type=submit], button').forEach(function(btn) {
-      var text = btn.textContent.trim() || btn.value || '';
-      if (/submit|apply|send|continue|next/i.test(text)) {
-        submitBtns.push({id: btn.id, text: text, idx: Array.from(document.querySelectorAll('button')).indexOf(btn)});
+
+    // Workday
+    var wdNext = document.querySelector(
+      '[data-automation-id="bottom-navigation-next-button"],' +
+      '[data-automation-id="bottom-navigation-send-it-button"]'
+    );
+    if (wdNext) submitBtns.push({id: wdNext.id || '', text: wdNext.textContent.trim(), ats: 'workday'});
+
+    // Greenhouse / iCIMS / Lever / BambooHR
+    var atsBtns = document.querySelectorAll(
+      '#submit_app, #app-submit-btn, .btn-submit, ' +
+      '[data-qa="btn-submit"], [data-testid="submit-app-button"], ' +
+      'button[class*="submit"], button[class*="apply"]'
+    );
+    atsBtns.forEach(function(b) {
+      if (!submitBtns.find(x => x.id === b.id)) {
+        submitBtns.push({id: b.id || '', text: b.textContent.trim()});
       }
     });
 
-    AndroidBridge.onResult('external_detect', JSON.stringify({fields: fields, submitButtons: submitBtns}));
+    // Generic type=submit / input[type=submit]
+    document.querySelectorAll('button[type=submit], input[type=submit]').forEach(function(b) {
+      if (!submitBtns.find(x => x.id === b.id))
+        submitBtns.push({id: b.id || '', text: (b.textContent || b.value || '').trim()});
+    });
+
+    // Any visible button whose text suggests submission
+    if (submitBtns.length === 0) {
+      document.querySelectorAll('button').forEach(function(b) {
+        var t = (b.textContent || '').trim();
+        if (/^(submit|apply|send application|send it|next|continue)$/i.test(t) &&
+            b.offsetParent !== null && !b.disabled) {
+          submitBtns.push({id: b.id || '', text: t});
+        }
+      });
+    }
+
+    AndroidBridge.onResult('external_detect', JSON.stringify({
+      fields: fields,
+      submitButtons: submitBtns,
+      pageUrl: window.location.href
+    }));
+
   } catch(e) {
     AndroidBridge.onError('external_detect', e.message);
   }
@@ -50,10 +80,10 @@
       if (lbl) return lbl.textContent.trim().replace(/[*\n\t]+/g, ' ').trim();
     }
     var prev = el.previousElementSibling;
-    if (prev && prev.tagName === 'LABEL') return prev.textContent.trim();
-    var parent = el.closest('[class*="form"], [class*="field"], [class*="input"], fieldset');
+    if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN')) return prev.textContent.trim();
+    var parent = el.closest('[class*="form"], [class*="field"], [class*="input"], fieldset, [class*="Field"], [class*="Form"]');
     if (parent) {
-      var lbl = parent.querySelector('label, legend, [class*="label"]');
+      var lbl = parent.querySelector('label, legend, [class*="label"], [class*="Label"]');
       if (lbl && !lbl.contains(el)) return lbl.textContent.trim().replace(/[*\n\t]+/g, ' ').trim();
     }
     return el.placeholder || el.name || '';
