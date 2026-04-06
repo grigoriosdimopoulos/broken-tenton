@@ -16,6 +16,7 @@ import com.linkedinautomation.presentation.history.HistoryScreen
 import com.linkedinautomation.presentation.monitor.MonitorScreen
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.linkedinautomation.presentation.activitydetail.ActivityDetailScreen
 import com.linkedinautomation.presentation.applicationdetail.ApplicationDetailScreen
 import com.linkedinautomation.presentation.linkedinlogin.LinkedInLoginScreen
 import com.linkedinautomation.presentation.settings.SettingsViewModel
@@ -229,9 +230,14 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             composable(Screen.ApprovalQueue.route) { ApprovalQueueScreen() }
             composable(Screen.Monitor.route) { MonitorScreen() }
             composable(Screen.History.route) {
-                HistoryScreen(onApplicationClick = { id ->
-                    navController.navigate(Screen.ApplicationDetail.route(id))
-                })
+                HistoryScreen(
+                    onApplicationClick = { id ->
+                        navController.navigate(Screen.ApplicationDetail.route(id))
+                    },
+                    onActivityClick = { logId ->
+                        navController.navigate(Screen.ActivityDetail.route(logId))
+                    }
+                )
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
@@ -281,6 +287,14 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                 arguments = listOf(navArgument("appId") { type = NavType.LongType })
             ) {
                 ApplicationDetailScreen(onBack = { navController.popBackStack() })
+            }
+
+            // ── Activity Log Detail ─────────────────────────────────────
+            composable(
+                route = Screen.ActivityDetail.route,
+                arguments = listOf(navArgument("logId") { type = NavType.LongType })
+            ) {
+                ActivityDetailScreen(onBack = { navController.popBackStack() })
             }
         }
     }

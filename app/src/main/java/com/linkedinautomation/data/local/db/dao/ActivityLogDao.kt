@@ -10,6 +10,9 @@ interface ActivityLogDao {
     @Query("SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 500")
     fun observeAll(): Flow<List<ActivityLogEntity>>
 
+    @Query("SELECT * FROM activity_logs WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): ActivityLogEntity?
+
     @Insert
     suspend fun insert(entity: ActivityLogEntity): Long
 

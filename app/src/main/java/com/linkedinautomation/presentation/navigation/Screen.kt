@@ -36,4 +36,9 @@ sealed class Screen(val route: String) {
     object ApplicationDetail : Screen("application/{appId}") {
         fun route(appId: Long) = "application/$appId"
     }
+
+    // Activity log detail
+    object ActivityDetail : Screen("activity/{logId}") {
+        fun route(logId: Long) = "activity/$logId"
+    }
 }

@@ -93,7 +93,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         linkedInCookies = linkedInCookies,
         easyApplyOnly = easyApplyOnly,
         aiAssistFallback = aiAssistFallback,
-        scanLookbackDays = if (scanLookbackDays > 0) scanLookbackDays else 1
+        scanLookbackDays = if (scanLookbackDays > 0) scanLookbackDays else 1,
+        easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -137,5 +138,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setEasyApplyOnly(easyApplyOnly)
             .setAiAssistFallback(aiAssistFallback)
             .setScanLookbackDays(scanLookbackDays)
+            .setEasyApplyMaxAttempts(easyApplyMaxAttempts)
             .build()
 }

@@ -1,6 +1,8 @@
 package com.linkedinautomation.presentation.history
 
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,6 +36,7 @@ import java.util.*
 @Composable
 fun HistoryScreen(
     onApplicationClick: (Long) -> Unit = {},
+    onActivityClick: (Long) -> Unit = {},
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val tabs = listOf("Applications", "Activity", "Claude AI")
@@ -55,7 +60,7 @@ fun HistoryScreen(
         }
         when (selectedTab) {
             0 -> ApplicationsTab(applications, onApplicationClick)
-            1 -> ActivityTab(activityLogs)
+            1 -> ActivityTab(activityLogs, onActivityClick)
             2 -> ClaudeAiTab(claudeLogs, totalTokens)
         }
     }
@@ -129,10 +134,11 @@ private val ACTION_COLOR = mapOf(
     ActivityAction.SCREENING_QUESTION   to Color(0xFFEA80FC),
     ActivityAction.BLOCKED_NAVIGATION   to Color(0xFFFF6D00),
     ActivityAction.EXTERNAL_URL_OPENED  to Color(0xFFFFFF00),
+    ActivityAction.JOB_FOUND           to Color(0xFFCCFF90),
 )
 
 @Composable
-private fun ActivityTab(logs: List<ActivityLog>) {
+private fun ActivityTab(logs: List<ActivityLog>, onActivityClick: (Long) -> Unit = {}) {
     val fmt = SimpleDateFormat("MM/dd HH:mm:ss", Locale.getDefault())
     if (logs.isEmpty()) {
         EmptyState("No activity yet — automation will log every step here")
@@ -144,135 +150,111 @@ private fun ActivityTab(logs: List<ActivityLog>) {
     ) {
         item {
             Text(
-                "${logs.size} events — tap to expand",
+                "${logs.size} events — tap to open detail",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
         }
         items(logs, key = { it.id }) { log ->
-            ActivityCard(log, fmt)
+            ActivityCard(log, fmt, onActivityClick)
         }
     }
 }
 
 @Composable
-private fun ActivityCard(log: ActivityLog, fmt: SimpleDateFormat) {
-    var expanded by remember { mutableStateOf(false) }
+private fun ActivityCard(
+    log: ActivityLog,
+    fmt: SimpleDateFormat,
+    onActivityClick: (Long) -> Unit = {}
+) {
     val accentColor = ACTION_COLOR[log.action] ?: MaterialTheme.colorScheme.primary
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { expanded = !expanded },
+            .clickable { onActivityClick(log.id) },
         shape = RoundedCornerShape(8.dp)
     ) {
-        Column {
+        Row {
             // Colored left border strip
-            Row {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .heightIn(min = 48.dp)
-                        .background(accentColor)
-                )
-                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .heightIn(min = 56.dp)
+                    .background(accentColor)
+            )
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).weight(1f)) {
 
-                    // Header row: action name + timestamp + chevron
+                // Header row: action name + timestamp + chevron
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        log.action.displayName,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        fmt.format(Date(log.timestamp)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Summary (first line, truncated)
+                if (log.details.isNotBlank()) {
+                    val summary = log.details.lines().first().take(80)
+                    Text(
+                        summary + if (log.details.length > 80 || log.details.lines().size > 1) "…" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+
+                // URL chip — always visible when url is present, opens browser on tap
+                if (!log.url.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            log.action.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                fmt.format(Date(log.timestamp)),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Summary line always visible
-                    if (log.details.isNotBlank()) {
-                        val summary = log.details.lines().first().take(90)
-                        Text(
-                            if (expanded) log.details
-                            else summary + if (log.details.length > 90) "…" else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 3.dp)
-                        )
-                    }
-
-                    // Expanded extras
-                    if (expanded) {
-                        if (!log.url.isNullOrBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "URL: ${log.url}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // Screenshot or text snapshot
-                        val ssPath = log.screenshotPath
-                        if (!ssPath.isNullOrBlank() && File(ssPath).exists()) {
-                            Spacer(Modifier.height(8.dp))
-                            if (ssPath.endsWith(".txt")) {
-                                val text = remember(ssPath) {
-                                    runCatching { File(ssPath).readText() }.getOrNull()
-                                }
-                                if (!text.isNullOrBlank()) {
-                                    Text(
-                                        "Page snapshot:",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(text, style = MaterialTheme.typography.bodySmall)
-                                }
-                            } else {
-                                val bitmap = remember(ssPath) {
-                                    runCatching {
-                                        BitmapFactory.decodeFile(ssPath)?.asImageBitmap()
-                                    }.getOrNull()
-                                }
-                                if (bitmap != null) {
-                                    Text(
-                                        "Screenshot:",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Card(
-                                        shape = RoundedCornerShape(6.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Image(
-                                            bitmap = bitmap,
-                                            contentDescription = "Page screenshot",
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentScale = ContentScale.FillWidth
-                                        )
-                                    }
-                                }
+                        modifier = Modifier.clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(log.url))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
                             }
                         }
+                    ) {
+                        Icon(
+                            Icons.Default.OpenInBrowser,
+                            contentDescription = "Open URL",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            log.url!!.take(60) + if (log.url.length > 60) "…" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
+                }
+
+                // Screenshot indicator
+                val ssPath = log.screenshotPath
+                if (!ssPath.isNullOrBlank() && File(ssPath).exists()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (ssPath.endsWith(".txt")) "Page snapshot available — tap to view" else "Screenshot available — tap to view",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
                 }
             }
         }

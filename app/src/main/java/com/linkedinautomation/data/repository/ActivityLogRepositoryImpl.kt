@@ -18,6 +18,8 @@ class ActivityLogRepositoryImpl @Inject constructor(
     override fun observeAll(): Flow<List<ActivityLog>> =
         dao.observeAll().map { list -> list.map { it.toDomain() } }
 
+    override suspend fun getById(id: Long): ActivityLog? = dao.getById(id)?.toDomain()
+
     override suspend fun log(
         action: ActivityAction,
         details: String,

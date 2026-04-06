@@ -308,8 +308,10 @@ fun SettingsJobPrefsScreen(
     var exclCo by remember(prefs) { mutableStateOf(prefs?.excludeCompanies?.joinToString(", ") ?: "") }
     var minSalary by remember(prefs) { mutableStateOf(prefs?.minSalary ?: 0) }
     var scanLookbackDays by remember(prefs) { mutableStateOf(prefs?.scanLookbackDays ?: 1) }
+    var easyApplyMaxAttempts by remember(prefs) { mutableStateOf(prefs?.easyApplyMaxAttempts ?: 5) }
     var salaryExpanded by remember { mutableStateOf(false) }
     var lookbackExpanded by remember { mutableStateOf(false) }
+    var attemptsExpanded by remember { mutableStateOf(false) }
 
     val salaryOptions = listOf(
         0 to "No minimum",
@@ -410,9 +412,30 @@ fun SettingsJobPrefsScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(Modifier.padding(12.dp)) {
+                val attemptsOptions = (1..10).map { it to "$it attempt${if (it == 1) "" else "s"}" }
+                val attemptsLabel = attemptsOptions.firstOrNull { it.first == easyApplyMaxAttempts }?.second ?: "5 attempts"
+                ExposedDropdownMenuBox(expanded = attemptsExpanded, onExpandedChange = { attemptsExpanded = it }) {
+                    OutlinedTextField(
+                        value = attemptsLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Max Easy Apply attempts") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(attemptsExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        supportingText = { Text("Retries before giving up or AI assist kicks in") }
+                    )
+                    ExposedDropdownMenu(expanded = attemptsExpanded, onDismissRequest = { attemptsExpanded = false }) {
+                        attemptsOptions.forEach { (value, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = {
+                                easyApplyMaxAttempts = value; attemptsExpanded = false
+                            })
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 ToggleRow(
                     label = "AI Assist Fallback",
-                    subtext = "If Easy Apply fails after ${5} retries, Claude AI will analyse the form and try once more with AI-generated answers. Requires Claude API key.",
+                    subtext = "If Easy Apply fails after $easyApplyMaxAttempts retries, Claude AI will analyse the form and try once more with AI-generated answers. Requires Claude API key.",
                     checked = prefs?.aiAssistFallback ?: false,
                     onCheckedChange = { viewModel.setAiAssistFallback(it) }
                 )
@@ -433,7 +456,7 @@ fun SettingsJobPrefsScreen(
                 location, remoteOnly, hybridOk, onsiteOk,
                 exclKw.split(",").map { it.trim() }.filter { it.isNotBlank() },
                 exclCo.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                minSalary, scanLookbackDays
+                minSalary, scanLookbackDays, easyApplyMaxAttempts
             )
             onBack()
         }, modifier = Modifier.fillMaxWidth()) { Text("Save") }

@@ -28,5 +28,6 @@ enum class ActivityAction(val displayName: String) {
     RUN_STARTED("Automation Run Started"),
     RUN_COMPLETED("Automation Run Completed"),
     LOCATION_SKIPPED("Job Skipped — Location"),
-    MODAL_CHECK("Submit Verification")
+    MODAL_CHECK("Submit Verification"),
+    JOB_FOUND("Job Found")
 }

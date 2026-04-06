@@ -33,7 +33,6 @@ class AutomationOrchestrator @Inject constructor(
     private val activityRepo: ActivityLogRepository
 ) {
     private val TAG = "AutomationOrchestrator"
-    private val MAX_EASY_APPLY_ATTEMPTS = 5
     private val _state = MutableStateFlow<AutomationState>(AutomationState.Idle)
     val state: StateFlow<AutomationState> = _state
 
@@ -80,9 +79,17 @@ class AutomationOrchestrator @Inject constructor(
                     log("${source.sourceName}: found ${jobs.size} jobs, ${newJobs.size} new")
                     activityRepo.log(
                         ActivityAction.SEARCH_EXECUTED,
-                        "${source.sourceName}: ${newJobs.size} new jobs",
+                        "${source.sourceName}: ${jobs.size} total, ${newJobs.size} new jobs found",
                         searchUrl
                     )
+                    // Log each new job individually so it's visible in the Activity tab
+                    for (job in newJobs) {
+                        activityRepo.log(
+                            ActivityAction.JOB_FOUND,
+                            "${job.title} @ ${job.company}\nType: ${if (job.isEasyApply) "Easy Apply" else "External"}\nLocation: ${job.location.ifBlank { "Not specified" }}\nSource: ${job.source}",
+                            job.url
+                        )
+                    }
                     allJobs.addAll(newJobs)
                 } catch (e: Exception) {
                     log("Error scanning ${source.sourceName}: ${e.message}")
@@ -302,10 +309,11 @@ class AutomationOrchestrator @Inject constructor(
         var lastFailReason = "Easy Apply did not complete"
         var aiAnswers: Map<String, String> = emptyMap() // populated by AI assist on final attempt
 
-        for (attempt in 1..MAX_EASY_APPLY_ATTEMPTS) {
+        val maxAttempts = prefs.easyApplyMaxAttempts
+        for (attempt in 1..maxAttempts) {
             // On every retry, re-navigate to the job page so the modal resets
             if (attempt > 1) {
-                log("Easy Apply attempt $attempt/${MAX_EASY_APPLY_ATTEMPTS} for ${job.title}")
+                log("Easy Apply attempt $attempt/$maxAttempts for ${job.title}")
                 engine.navigateTo(job.url, 15_000)
                 delay(2000)
             }
