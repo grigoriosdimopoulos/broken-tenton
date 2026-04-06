@@ -372,8 +372,9 @@ fun SettingsJobPrefsScreen(
         OutlinedTextField(value = exclCo, onValueChange = { exclCo = it }, label = { Text("Exclude companies") },
             modifier = Modifier.fillMaxWidth(), supportingText = { Text("Comma-separated") })
         Spacer(Modifier.height(12.dp))
+        // -1 = All time (sentinel; 0 is the proto default meaning "never set → 1 day")
         val lookbackOptions = listOf(1 to "Last 24 hours", 3 to "Last 3 days", 7 to "Last week",
-            14 to "Last 2 weeks", 30 to "Last month", 0 to "All time")
+            14 to "Last 2 weeks", 30 to "Last month", -1 to "All time")
         val lookbackLabel = lookbackOptions.firstOrNull { it.first == scanLookbackDays }?.second ?: "Last 24 hours"
         ExposedDropdownMenuBox(expanded = lookbackExpanded, onExpandedChange = { lookbackExpanded = it }) {
             OutlinedTextField(

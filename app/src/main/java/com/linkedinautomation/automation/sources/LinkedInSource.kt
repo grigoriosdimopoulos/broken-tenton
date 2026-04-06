@@ -39,9 +39,9 @@ class LinkedInSource : JobSource {
         }
 
         // f_TPR = time-posted filter; r<seconds> = posted within last N seconds
-        // scanLookbackDays=0 means "all time" (no time filter)
+        // scanLookbackDays=-1 means "all time" (no time filter)
         val timeFilter = when (prefs.scanLookbackDays) {
-            0    -> ""                          // all time
+            -1   -> ""                          // all time (user explicitly selected)
             1    -> "&f_TPR=r86400"             // last 24h
             3    -> "&f_TPR=r259200"            // last 3 days
             7    -> "&f_TPR=r604800"            // last week
@@ -50,11 +50,16 @@ class LinkedInSource : JobSource {
             else -> "&f_TPR=r${prefs.scanLookbackDays * 86400}"
         }
 
+        // When Easy Apply Only mode is on, ask LinkedIn to pre-filter to Easy Apply jobs only
+        // This avoids scraping external-apply jobs that would just get skipped anyway
+        val easyApplyFilter = if (prefs.easyApplyOnly) "&f_AL=true" else ""
+
         return "https://www.linkedin.com/jobs/search/" +
                 "?keywords=${URLEncoder.encode(keywords, "UTF-8")}" +
                 "&location=${URLEncoder.encode(location, "UTF-8")}" +
                 workType +
                 salaryFilter +
+                easyApplyFilter +
                 "&sortBy=DD" +
                 timeFilter
     }

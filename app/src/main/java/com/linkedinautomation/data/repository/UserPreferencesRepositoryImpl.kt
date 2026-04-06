@@ -93,7 +93,11 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         linkedInCookies = linkedInCookies,
         easyApplyOnly = easyApplyOnly,
         aiAssistFallback = aiAssistFallback,
-        scanLookbackDays = if (scanLookbackDays > 0) scanLookbackDays else 1,
+        scanLookbackDays = when {
+            scanLookbackDays < 0 -> -1  // -1 = "All time" (user explicitly selected)
+            scanLookbackDays > 0 -> scanLookbackDays
+            else -> 1                   // 0 = proto default (never set) → 1 day
+        },
         easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5
     )
 

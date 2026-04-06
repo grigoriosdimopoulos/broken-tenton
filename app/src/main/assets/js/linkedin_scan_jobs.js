@@ -1,5 +1,19 @@
 (function() {
   try {
+    // Helper: return the clean, visible text from an element, avoiding
+    // hidden accessibility duplicates (aria-hidden spans, visually-hidden spans)
+    function cleanText(el) {
+      if (!el) return '';
+      // Prefer innerText: skips CSS-hidden content (visually-hidden, sr-only, etc.)
+      var t = (el.innerText || '').trim();
+      if (t) return t;
+      // Fallback: remove known hidden child spans before using textContent
+      var clone = el.cloneNode(true);
+      clone.querySelectorAll('[aria-hidden="true"], .visually-hidden, .sr-only, [class*="hidden"]')
+           .forEach(function(n) { n.remove(); });
+      return clone.textContent.trim();
+    }
+
     var jobs = [];
     var jobCards = document.querySelectorAll(
       '.jobs-search-results__list-item, .job-card-container, [data-job-id], .scaffold-layout__list-item'
@@ -7,13 +21,39 @@
 
     jobCards.forEach(function(card) {
       var jobId = card.getAttribute('data-job-id') ||
-                  card.querySelector('[data-job-id]')?.getAttribute('data-job-id') || '';
-      var titleEl  = card.querySelector('.job-card-list__title, .job-card-container__link, h3 a, h3');
-      var companyEl = card.querySelector('.job-card-container__primary-description, .job-card-list__company-name, h4');
-      var easyApplyBadge = card.querySelector('.job-card-container__apply-method, .jobs-apply-button, [aria-label*="Easy Apply"]');
-      var linkEl   = card.querySelector('a[href*="/jobs/view/"]');
+                  (card.querySelector('[data-job-id]') || {}).getAttribute('data-job-id') || '';
 
-      // Extract location text (city/country shown below company name)
+      // Title: try most specific selector first, then fall back
+      var titleEl = card.querySelector(
+        '.job-card-list__title--link strong, ' +
+        '.job-card-list__title--link, ' +
+        '.job-card-list__title, ' +
+        '.job-card-container__link strong, ' +
+        '.job-card-container__link, ' +
+        'h3 a strong, h3 a, h3'
+      );
+
+      // Company: LinkedIn 2025 DOM — try multiple selectors
+      var companyEl = card.querySelector(
+        '.artdeco-entity-lockup__subtitle span, ' +
+        '.artdeco-entity-lockup__subtitle, ' +
+        '.job-card-container__primary-description, ' +
+        '.job-card-list__company-name, ' +
+        '.job-card-container__company-name, ' +
+        '.base-search-card__subtitle, ' +
+        'h4 a, h4'
+      );
+
+      var easyApplyBadge = card.querySelector(
+        '.job-card-container__apply-method, ' +
+        '.jobs-apply-button, ' +
+        '[aria-label*="Easy Apply"], ' +
+        '.job-card-container__footer-item--apply'
+      );
+
+      var linkEl = card.querySelector('a[href*="/jobs/view/"]');
+
+      // Location: first metadata item under the company
       var locationEl = card.querySelector(
         '.job-card-container__metadata-item, ' +
         '.artdeco-entity-lockup__caption, ' +
@@ -21,7 +61,7 @@
         '[class*="metadata"] li:first-child, ' +
         '.job-card-container__metadata-wrapper li'
       );
-      var jobLocation = locationEl ? locationEl.textContent.trim() : '';
+      var jobLocation = cleanText(locationEl);
 
       if (!jobId && linkEl) {
         var match = linkEl.href.match(/\/jobs\/view\/(\d+)/);
@@ -31,9 +71,9 @@
       if (jobId) {
         jobs.push({
           id: jobId,
-          title: titleEl   ? titleEl.textContent.trim()   : 'Unknown',
-          company: companyEl ? companyEl.textContent.trim() : 'Unknown',
-          location: jobLocation,
+          title:     cleanText(titleEl)   || 'Unknown',
+          company:   cleanText(companyEl) || 'Unknown',
+          location:  jobLocation,
           isEasyApply: !!easyApplyBadge,
           url: linkEl ? linkEl.href : ('https://www.linkedin.com/jobs/view/' + jobId)
         });

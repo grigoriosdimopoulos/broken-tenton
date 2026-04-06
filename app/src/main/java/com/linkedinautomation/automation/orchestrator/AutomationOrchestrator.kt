@@ -509,9 +509,9 @@ class AutomationOrchestrator @Inject constructor(
 
         var resolvedAtsUrl: String = if (!job.url.contains("linkedin.com")) job.url else ""
 
-        // Try up to 3 times with different navigation / submit strategies
-        for (attempt in 1..3) {
-            log("External apply attempt $attempt/3: ${job.title} @ ${job.company}")
+        val maxAttempts = prefs.easyApplyMaxAttempts.coerceAtLeast(1)
+        for (attempt in 1..maxAttempts) {
+            log("External apply attempt $attempt/$maxAttempts: ${job.title} @ ${job.company}")
             try {
                 // ── Step 1: Resolve / navigate to the real ATS page ──────────────
                 when {
@@ -601,7 +601,7 @@ class AutomationOrchestrator @Inject constructor(
             }
         }
 
-        recordFailed(job, "External apply failed after 3 attempts — no submit button found on ATS page")
+        recordFailed(job, "External apply failed after $maxAttempts attempts — no submit button found on ATS page")
         return false
     }
 
