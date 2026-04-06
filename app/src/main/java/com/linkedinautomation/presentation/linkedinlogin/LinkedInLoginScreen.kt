@@ -14,6 +14,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 
+// LinkedIn URLs that indicate a successful login (user is now on the logged-in app)
+private val LOGGED_IN_PATHS = listOf(
+    "/feed", "/jobs", "/mynetwork", "/messaging",
+    "/notifications", "/in/", "/home", "/checkpoint/post-login"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkedInLoginScreen(
@@ -47,25 +53,44 @@ fun LinkedInLoginScreen(
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
-                            userAgentString = "Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                            setSupportMultipleWindows(true)
+                            javaScriptCanOpenWindowsAutomatically = true
+                            loadWithOverviewMode = true
+                            useWideViewPort = true
+                            setSupportZoom(false)
+                            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+                                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                                "Chrome/121.0.0.0 Mobile Safari/537.36"
                         }
-                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.setAcceptCookie(true)
+                        cookieManager.setAcceptThirdPartyCookies(this, true)
+
                         webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                            override fun onPageStarted(
+                                view: WebView?, url: String?,
+                                favicon: android.graphics.Bitmap?
+                            ) {
                                 loading = true
-                                url?.let { pageUrl ->
-                                    if (pageUrl.contains("linkedin.com/feed") ||
-                                        pageUrl.contains("linkedin.com/jobs") ||
-                                        pageUrl.contains("linkedin.com/checkpoint/post-login")) {
-                                        val cookies = CookieManager.getInstance().getCookie(".linkedin.com") ?: ""
-                                        if (cookies.isNotBlank()) {
-                                            viewModel.saveCookies(cookies)
-                                        }
-                                    }
-                                }
                             }
+
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 loading = false
+                                // Check AFTER page fully loaded — cookies are ready now
+                                url?.let { checkForLogin(it, viewModel) }
+                            }
+
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: android.webkit.WebResourceRequest?
+                            ): Boolean {
+                                val url = request?.url?.toString() ?: return false
+                                // Capture cookies as soon as a post-login URL is detected
+                                // so we don't miss fast redirects
+                                if (isLoggedInUrl(url)) {
+                                    checkForLogin(url, viewModel)
+                                }
+                                return false // let WebView follow the redirect
                             }
                         }
                         loadUrl("https://www.linkedin.com/login")
@@ -75,11 +100,28 @@ fun LinkedInLoginScreen(
             )
 
             if (loading) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(24.dp).align(Alignment.TopCenter).padding(top = 8.dp)
-                )
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
+    }
+}
+
+private fun isLoggedInUrl(url: String): Boolean {
+    val lower = url.lowercase()
+    if (!lower.contains("linkedin.com")) return false
+    return LOGGED_IN_PATHS.any { path -> lower.contains("linkedin.com$path") }
+}
+
+private fun checkForLogin(url: String, viewModel: LinkedInLoginViewModel) {
+    if (!isLoggedInUrl(url)) return
+    // Flush pending writes then read
+    val cookieManager = CookieManager.getInstance()
+    cookieManager.flush()
+    val cookies = cookieManager.getCookie(".linkedin.com")
+        ?: cookieManager.getCookie("https://www.linkedin.com")
+        ?: return
+    if (cookies.isNotBlank() && cookies.contains("li_at")) {
+        // li_at is LinkedIn's session auth cookie — if present, user is logged in
+        viewModel.saveCookies(cookies)
     }
 }

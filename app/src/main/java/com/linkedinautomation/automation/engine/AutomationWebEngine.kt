@@ -67,6 +67,10 @@ class AutomationWebEngine(
 
     fun create() {
         val wv = WebView(context).also { webView = it }
+        // Software rendering is required for WebView.draw(canvas) to work in a background
+        // Foreground Service context (hardware-accelerated views render blank).
+        // Must be set BEFORE any content loads — setting it just before draw() is too late.
+        wv.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -140,16 +144,21 @@ class AutomationWebEngine(
 
     /**
      * Captures the current WebView content as a PNG screenshot.
+     * Uses WebView.capturePicture() which works in headless/background service contexts
+     * because it reads from the internal rendering buffer rather than hardware compositing.
      * Returns the absolute file path on success, null on failure.
      */
+    @Suppress("DEPRECATION")
     suspend fun takeScreenshot(tag: String, screenshotsDir: File): String? =
         withContext(Dispatchers.Main) {
             runCatching {
                 val wv = webView ?: return@runCatching null
                 screenshotsDir.mkdirs()
+
                 val targetW = 1080
                 val targetH = 1920
-                // Measure and layout if WebView has no dimensions (headless)
+
+                // Ensure the WebView has been laid out (required for both approaches below)
                 if (wv.width == 0 || wv.height == 0) {
                     wv.measure(
                         android.view.View.MeasureSpec.makeMeasureSpec(targetW, android.view.View.MeasureSpec.EXACTLY),
@@ -157,14 +166,37 @@ class AutomationWebEngine(
                     )
                     wv.layout(0, 0, targetW, targetH)
                 }
+
                 val w = wv.width.coerceAtLeast(targetW)
                 val h = wv.height.coerceAtLeast(targetH)
-                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+
+                // Primary: capturePicture() reads from WebKit's internal picture buffer —
+                // it works in background services and doesn't depend on GPU compositing.
+                val picture = wv.capturePicture()
+                val picW = picture.width.takeIf { it > 0 } ?: w
+                val picH = picture.height.takeIf { it > 0 } ?: h
+
+                val bitmap = Bitmap.createBitmap(picW, picH, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(bitmap)
-                // Software rendering required for WebView.draw() in background/headless contexts
-                wv.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
-                wv.draw(canvas)
-                wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                picture.draw(canvas)
+
+                // Sanity check — if the bitmap is entirely white/black the picture was empty;
+                // fall back to software draw() which we set up in create()
+                val pixels = IntArray(minOf(100, picW * picH))
+                bitmap.getPixels(pixels, 0, picW, 0, 0, minOf(picW, 10), minOf(picH, 10))
+                val allSame = pixels.all { it == pixels[0] }
+                if (allSame && pixels[0] == -1 /* white */ || allSame && pixels[0] == -16777216 /* black */) {
+                    // Picture was blank — try draw() (LAYER_TYPE_SOFTWARE already set in create())
+                    val fallbackBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val fallbackCanvas = Canvas(fallbackBitmap)
+                    wv.draw(fallbackCanvas)
+                    bitmap.recycle()
+                    val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
+                    FileOutputStream(file).use { fallbackBitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
+                    fallbackBitmap.recycle()
+                    return@runCatching file.absolutePath
+                }
+
                 val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
                 FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
                 bitmap.recycle()

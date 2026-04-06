@@ -211,12 +211,24 @@ class AutomationOrchestrator @Inject constructor(
         }
         cookieManager.flush()
 
-        // Navigate to LinkedIn jobs to verify session is valid
-        engine.navigateTo("https://www.linkedin.com/jobs/", 15_000)
+        // Navigate to LinkedIn feed to verify the session is actually active
+        val landedUrl = engine.navigateTo("https://www.linkedin.com/feed/", 15_000)
         delay(2000)
 
+        // If we ended up back on a login/checkpoint page the cookies are expired
+        val isLoginPage = landedUrl.contains("/login") ||
+            landedUrl.contains("/uas/login") ||
+            landedUrl.contains("/checkpoint/lg/")
+        if (isLoginPage) {
+            activityRepo.log(
+                ActivityAction.LOGIN_FAILURE,
+                "LinkedIn session expired — please re-authenticate in Settings → Account"
+            )
+            throw RuntimeException("LinkedIn session expired. Open the app and go to Settings → Account to sign in again.")
+        }
+
         activityRepo.log(ActivityAction.LOGIN_SUCCESS, "LinkedIn session restored via cookies")
-        log("LinkedIn session active")
+        log("LinkedIn session active (landed: $landedUrl)")
     }
 
     private suspend fun applyToJob(
@@ -675,42 +687,53 @@ class AutomationOrchestrator @Inject constructor(
 
     /**
      * Returns true if the job's listed location is compatible with the user's preferred location.
-     * Uses LAST-COMPONENT matching to avoid false positives like "Greece, NY" when the user
-     * wants Greece (country). Format "City, Country" → only the COUNTRY (last part) is checked.
+     *
+     * Strategy:
+     * - Blank job location → REJECT (unknown location = unknown country; do not trust URL filter).
+     *   Exception: if user allows remote AND the board is remote-focused (RemoteOK, WeWorkRemotely).
+     * - Remote/worldwide keywords → only accept if user has remoteOnly or hybridOk.
+     * - Multi-component "City, Country" format → match ONLY the LAST component so that
+     *   "Greece, NY" does NOT match a user searching for "Greece" (the country).
+     * - Single component "Greece" → full-string match.
      */
     private fun locationMatches(job: ScrapedJob, prefs: UserPreferences): Boolean {
-        if (prefs.location.isBlank()) return true
+        if (prefs.location.isBlank()) return true  // No preference → all match
+
         val jobLoc = job.location.lowercase().trim()
 
-        // LinkedIn extracts location from job cards — reject blank.
-        // Direct-mode boards rely on URL-based location search, so blank scraped location
-        // means we couldn't extract it (not that it's remote). Trust URL filter for those.
-        if (jobLoc.isBlank()) return job.source != "LinkedIn"
+        // Blank scraped location: we have no idea where the job is.
+        // NEVER allow this if the user specified a location — it could be anywhere.
+        // Only allow blank-location jobs from boards that are inherently remote-only.
+        if (jobLoc.isBlank()) {
+            val isRemoteBoard = job.source == "RemoteOK" || job.source == "WeWorkRemotely"
+            return isRemoteBoard && (prefs.remoteOnly || prefs.hybridOk)
+        }
 
-        // Remote/Anywhere jobs — allow only if user accepts remote/hybrid
+        // Remote/anywhere keywords
         if (jobLoc.contains("remote") || jobLoc.contains("anywhere") ||
             jobLoc.contains("worldwide") || jobLoc.contains("global")) {
             return prefs.remoteOnly || prefs.hybridOk
         }
 
-        // Build user location words (3+ chars)
+        // Build user location word set (3+ chars, e.g. "Greece" → ["greece"])
         val userWords = prefs.location.lowercase()
             .split(",", " ", "-")
             .map { it.trim() }
             .filter { it.length >= 3 }
 
-        // Split job location into components, e.g. "Athens, Greece" → ["athens", "greece"]
-        //                                             "Greece, NY"    → ["greece", "ny"]
+        // Split job location by comma: "Athens, Greece" → ["athens", "greece"]
+        //                               "Greece, NY"    → ["greece", "ny"]
+        //                               "Attica, Athens, Greece" → ["attica", "athens", "greece"]
         val jobParts = jobLoc.split(",").map { it.trim() }
 
-        // PRIMARY CHECK: match against the LAST component (typically country or state)
-        // "Athens, Greece" last = "greece" → matches "Greece" ✓
-        // "Greece, NY"     last = "ny"     → does NOT match "Greece" ✓
+        // PRIMARY: match the LAST component (country/state).
+        // "Athens, Greece"  → last="greece"  → matches user "Greece" ✓
+        // "Greece, NY"      → last="ny"       → NO match for user "Greece" ✓
+        // "Athens, Attica, Greece" → last="greece" ✓
         val lastPart = jobParts.last()
         if (userWords.any { word -> lastPart.contains(word) }) return true
 
-        // SECONDARY CHECK: if job location has only ONE component (e.g. "Greece", "Remote")
-        // match against the full string
+        // SECONDARY: single-component location (just "Greece" or just "Athens")
         if (jobParts.size == 1 && userWords.any { word -> jobLoc.contains(word) }) return true
 
         return false

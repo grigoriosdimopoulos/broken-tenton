@@ -141,10 +141,10 @@ class SetupViewModel @Inject constructor(
         viewModelScope.launch {
             val finalPrefs = _prefs.value.copy(
                 isSetupComplete = true,
-                automationEnabled = true
+                automationEnabled = false  // User must enable manually from the Monitor tab
             )
             savePrefsUseCase(finalPrefs)
-            workScheduler.schedule(finalPrefs.scanIntervalMinutes)
+            // Do NOT schedule the worker here — user enables automation from Monitor tab
             userHasEdited = false
             _setupDone.value = true
         }
