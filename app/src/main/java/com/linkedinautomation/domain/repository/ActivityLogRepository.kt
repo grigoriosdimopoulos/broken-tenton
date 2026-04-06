@@ -6,6 +6,6 @@ import kotlinx.coroutines.flow.Flow
 
 interface ActivityLogRepository {
     fun observeAll(): Flow<List<ActivityLog>>
-    suspend fun log(action: ActivityAction, details: String, url: String? = null)
+    suspend fun log(action: ActivityAction, details: String, url: String? = null, screenshotPath: String? = null)
     suspend fun pruneOlderThan(timestamp: Long)
 }

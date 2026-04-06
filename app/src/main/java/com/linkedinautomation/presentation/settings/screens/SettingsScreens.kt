@@ -307,7 +307,9 @@ fun SettingsJobPrefsScreen(
     var exclKw by remember(prefs) { mutableStateOf(prefs?.excludeKeywords?.joinToString(", ") ?: "") }
     var exclCo by remember(prefs) { mutableStateOf(prefs?.excludeCompanies?.joinToString(", ") ?: "") }
     var minSalary by remember(prefs) { mutableStateOf(prefs?.minSalary ?: 0) }
+    var scanLookbackDays by remember(prefs) { mutableStateOf(prefs?.scanLookbackDays ?: 1) }
     var salaryExpanded by remember { mutableStateOf(false) }
+    var lookbackExpanded by remember { mutableStateOf(false) }
 
     val salaryOptions = listOf(
         0 to "No minimum",
@@ -367,6 +369,26 @@ fun SettingsJobPrefsScreen(
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(value = exclCo, onValueChange = { exclCo = it }, label = { Text("Exclude companies") },
             modifier = Modifier.fillMaxWidth(), supportingText = { Text("Comma-separated") })
+        Spacer(Modifier.height(12.dp))
+        val lookbackOptions = listOf(1 to "Last 24 hours", 3 to "Last 3 days", 7 to "Last week",
+            14 to "Last 2 weeks", 30 to "Last month", 0 to "All time")
+        val lookbackLabel = lookbackOptions.firstOrNull { it.first == scanLookbackDays }?.second ?: "Last 24 hours"
+        ExposedDropdownMenuBox(expanded = lookbackExpanded, onExpandedChange = { lookbackExpanded = it }) {
+            OutlinedTextField(
+                value = lookbackLabel,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Search how far back") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(lookbackExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(),
+                supportingText = { Text("Older = more results but slower") }
+            )
+            ExposedDropdownMenu(expanded = lookbackExpanded, onDismissRequest = { lookbackExpanded = false }) {
+                lookbackOptions.forEach { (value, label) ->
+                    DropdownMenuItem(text = { Text(label) }, onClick = { scanLookbackDays = value; lookbackExpanded = false })
+                }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(8.dp))
@@ -411,7 +433,7 @@ fun SettingsJobPrefsScreen(
                 location, remoteOnly, hybridOk, onsiteOk,
                 exclKw.split(",").map { it.trim() }.filter { it.isNotBlank() },
                 exclCo.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                minSalary
+                minSalary, scanLookbackDays
             )
             onBack()
         }, modifier = Modifier.fillMaxWidth()) { Text("Save") }

@@ -5,7 +5,8 @@ data class ActivityLog(
     val action: ActivityAction,
     val details: String,
     val url: String? = null,
-    val timestamp: Long
+    val timestamp: Long,
+    val screenshotPath: String? = null
 )
 
 enum class ActivityAction(val displayName: String) {
@@ -16,12 +17,16 @@ enum class ActivityAction(val displayName: String) {
     JOB_VIEWED("Job Viewed"),
     EASY_APPLY_STARTED("Easy Apply Started"),
     EASY_APPLY_SUBMITTED("Easy Apply Submitted"),
+    EASY_APPLY_FAILED("Easy Apply Failed"),
+    EASY_APPLY_STEP("Easy Apply Step"),
     EXTERNAL_URL_OPENED("External Site Opened"),
-    SCREENING_QUESTION("Screening Question Detected"),
+    SCREENING_QUESTION("Screening Question"),
     RESUME_UPLOADED("Resume Uploaded"),
     APPLICATION_SUBMITTED("Application Submitted"),
     APPLICATION_FAILED("Application Failed"),
     BLOCKED_NAVIGATION("Blocked Navigation"),
     RUN_STARTED("Automation Run Started"),
-    RUN_COMPLETED("Automation Run Completed")
+    RUN_COMPLETED("Automation Run Completed"),
+    LOCATION_SKIPPED("Job Skipped — Location"),
+    MODAL_CHECK("Submit Verification")
 }

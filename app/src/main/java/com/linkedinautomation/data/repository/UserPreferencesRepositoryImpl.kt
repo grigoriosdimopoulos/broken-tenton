@@ -92,7 +92,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         email = email,
         linkedInCookies = linkedInCookies,
         easyApplyOnly = easyApplyOnly,
-        aiAssistFallback = aiAssistFallback
+        aiAssistFallback = aiAssistFallback,
+        scanLookbackDays = if (scanLookbackDays > 0) scanLookbackDays else 1
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -135,5 +136,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setLinkedInCookies(linkedInCookies)
             .setEasyApplyOnly(easyApplyOnly)
             .setAiAssistFallback(aiAssistFallback)
+            .setScanLookbackDays(scanLookbackDays)
             .build()
 }

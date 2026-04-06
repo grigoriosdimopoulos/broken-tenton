@@ -109,6 +109,11 @@ class AutomationOrchestrator @Inject constructor(
                 if (!locOk) {
                     val reason = if (job.location.isBlank()) "no location extracted" else "location='${job.location}'"
                     log("SKIP [Location mismatch] ${job.title} @ ${job.company} — $reason (want '${prefs.location}')")
+                    activityRepo.log(
+                        ActivityAction.LOCATION_SKIPPED,
+                        "${job.title} @ ${job.company}\nScraped location: ${job.location.ifBlank { "(blank)" }}\nWanted: ${prefs.location}",
+                        job.url
+                    )
                 }
                 locOk
             }
@@ -144,17 +149,24 @@ class AutomationOrchestrator @Inject constructor(
                         queuedCount++
                     } else {
                         val success = applyToJob(engine, job, prefs)
-                        // Capture screenshot right after apply (success or fail page)
+                        // Screenshot of the final page (confirmation or error)
                         val ssPath = engine?.takeScreenshot("job_${job.id.take(12)}", screenshotsDir)
-                        if (success) {
-                            appliedCount++
-                            onNotifyApplied?.invoke(job.title, job.company)
-                        }
-                        // Update screenshotPath on whatever record was just saved
+                        // Attach screenshot to the most recent activity entry (the submit/fail log)
                         if (ssPath != null) {
+                            activityRepo.log(
+                                if (success) ActivityAction.EASY_APPLY_SUBMITTED else ActivityAction.EASY_APPLY_FAILED,
+                                if (success) "Applied: ${job.title} @ ${job.company}"
+                                else "Failed: ${job.title} @ ${job.company}",
+                                job.url,
+                                ssPath
+                            )
                             jobRepo.getByJobId(job.id)?.let { saved ->
                                 jobRepo.save(saved.copy(screenshotPath = ssPath))
                             }
+                        }
+                        if (success) {
+                            appliedCount++
+                            onNotifyApplied?.invoke(job.title, job.company)
                         }
                     }
                 } catch (e: Exception) {
@@ -243,7 +255,10 @@ class AutomationOrchestrator @Inject constructor(
             throw RuntimeException("LinkedIn session expired. Open the app and go to Settings → Account to sign in again.")
         }
 
-        activityRepo.log(ActivityAction.LOGIN_SUCCESS, "LinkedIn session restored via cookies")
+        activityRepo.log(
+            ActivityAction.LOGIN_SUCCESS,
+            "LinkedIn session active\nLanded URL: $landedUrl\nCookies present: ${prefs.linkedInCookies.take(80)}…"
+        )
         log("LinkedIn session active (landed: $landedUrl)")
     }
 
@@ -341,73 +356,108 @@ class AutomationOrchestrator @Inject constructor(
 
         while (pagesNavigated < maxPages) {
             pagesNavigated++
-            val result = runCatching {
+            val rawResult = runCatching {
                 engine.runJs("easy_apply", jsLoader.load(ScriptRegistry.LINKEDIN_EASY_APPLY), 10_000)
-            }.getOrNull() ?: return null
+            }.getOrNull() ?: run {
+                log("Easy Apply JS timed out / error on page $pagesNavigated")
+                return null
+            }
 
-            val data = parseJson(result) ?: return null
+            log("Easy Apply page $pagesNavigated raw result: ${rawResult.take(200)}")
+            activityRepo.log(
+                ActivityAction.EASY_APPLY_STEP,
+                "Page $pagesNavigated — JS result: ${rawResult.take(300)}",
+                job.url
+            )
 
-            when (data["action"] as? String) {
+            val data = parseJson(rawResult) ?: run {
+                log("Easy Apply: could not parse JSON on page $pagesNavigated")
+                return null
+            }
+
+            when (val action = data["action"] as? String) {
                 "external" -> {
                     val url = data["url"] as? String ?: return null
+                    log("Easy Apply: redirecting to external URL: $url")
                     return if (performExternalApply(engine, job.copy(url = url, isEasyApply = false), prefs)) true else null
                 }
                 "opened_modal" -> {
+                    log("Easy Apply: modal opened, waiting...")
                     delay(1200)
                     continue
                 }
                 "form_page" -> {
-                    // Fill known fields first, then AI-generated answers if available
+                    val hasSubmit = data["hasSubmit"] as? Boolean ?: false
+                    @Suppress("UNCHECKED_CAST")
+                    val fields = data["fields"] as? List<Map<String, Any>> ?: emptyList()
+                    log("Easy Apply: form page, ${fields.size} fields, hasSubmit=$hasSubmit")
+
                     fillScreeningQuestions(engine, job, prefs, aiAnswers)
                     delay(500)
 
-                    val hasSubmit = data["hasSubmit"] as? Boolean ?: false
-                    val action = if (hasSubmit) "submit" else "next"
+                    val btnAction = if (hasSubmit) "submit" else "next"
                     val actionScript = jsLoader.loadAndSubstitute(
                         ScriptRegistry.LINKEDIN_SUBMIT,
-                        mapOf("ACTION" to action, "FILL_ID" to "", "FILL_VALUE" to "")
+                        mapOf("ACTION" to btnAction, "FILL_ID" to "", "FILL_VALUE" to "")
                     )
                     val actionResult = runCatching {
                         engine.runJs("submit", actionScript, 8_000)
-                    }.getOrNull() ?: return null
+                    }.getOrNull() ?: run {
+                        log("Easy Apply: submit/next JS timed out")
+                        return null
+                    }
+
+                    log("Easy Apply: $btnAction result = $actionResult")
+                    activityRepo.log(
+                        ActivityAction.EASY_APPLY_STEP,
+                        "Clicked $btnAction — result: $actionResult\nJob: ${job.title} @ ${job.company}",
+                        job.url
+                    )
 
                     if (actionResult.contains("error", ignoreCase = true)) {
-                        return null // button not found
+                        log("Easy Apply: $btnAction button not found — ${actionResult.take(100)}")
+                        return null
                     }
 
                     delay(1500)
 
                     if (hasSubmit) {
-                        // Check if the modal actually closed (real submission)
-                        // vs stayed open (LinkedIn validation rejected the form)
                         val modalCheckScript = jsLoader.load(ScriptRegistry.LINKEDIN_MODAL_CHECK)
                         val modalCheck = runCatching {
                             engine.runJs("modal_check", modalCheckScript, 6_000)
                         }.getOrNull()
                         val modalData = modalCheck?.let { parseJson(it) }
                         val modalStillOpen = modalData?.get("modalOpen") as? Boolean ?: true
+                        val errors = (modalData?.get("errors") as? List<*>)?.joinToString("; ") ?: ""
+
+                        log("Modal check: open=$modalStillOpen errors='$errors'")
+                        activityRepo.log(
+                            ActivityAction.MODAL_CHECK,
+                            "Modal open=$modalStillOpen\nValidation errors: ${errors.ifBlank { "none" }}\nJob: ${job.title} @ ${job.company}",
+                            job.url
+                        )
 
                         return if (!modalStillOpen) {
-                            // Modal closed → genuine submit
                             delay(1500)
                             val verified = verifySubmission(engine)
                             recordApplied(job, ApplicationType.EasyApply, verified)
-                            activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED, "${job.title} at ${job.company}")
                             log("Applied (Easy Apply${if (!verified) " — unverified" else ""}): ${job.title}")
                             true
                         } else {
-                            // Modal still open = validation errors; return false so caller retries
-                            val errors = (modalData?.get("errors") as? List<*>)?.joinToString("; ") ?: ""
-                            log("Easy Apply submit rejected — modal still open${if (errors.isNotBlank()) ": $errors" else ""}")
+                            log("Easy Apply submit REJECTED — modal still open. Errors: $errors")
                             false
                         }
                     }
                     // Clicked "Next" — continue to next page
                 }
-                else -> return null // unknown action
+                else -> {
+                    log("Easy Apply: unknown action '$action' on page $pagesNavigated")
+                    return null
+                }
             }
         }
-        return null // exceeded page limit
+        log("Easy Apply: exceeded $maxPages page limit for ${job.title}")
+        return null
     }
 
     /** Uses Claude to generate answers for all visible Easy Apply form fields. */
@@ -719,7 +769,17 @@ class AutomationOrchestrator @Inject constructor(
             val script = jsLoader.load(ScriptRegistry.VERIFY_SUBMISSION)
             val result = engine.runJs("verify_submit", script, 6_000)
             val data = parseJson(result)
-            data?.get("verified") as? Boolean ?: false
+            val verified = data?.get("verified") as? Boolean ?: false
+            val indicator = data?.get("indicator") as? String ?: "none"
+            val pageTitle = data?.get("pageTitle") as? String ?: ""
+            val snippet = data?.get("bodySnippet") as? String ?: ""
+            log("Verify submission: verified=$verified indicator='$indicator' title='$pageTitle'")
+            log("Page snippet: ${snippet.take(150)}")
+            activityRepo.log(
+                ActivityAction.MODAL_CHECK,
+                "Submit verified=$verified\nIndicator: $indicator\nPage: $pageTitle\nSnippet: ${snippet.take(200)}"
+            )
+            verified
         }.getOrElse { false }
     }
 

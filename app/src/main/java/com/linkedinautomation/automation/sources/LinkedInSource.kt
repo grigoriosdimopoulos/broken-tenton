@@ -38,12 +38,24 @@ class LinkedInSource : JobSource {
             else -> ""
         }
 
+        // f_TPR = time-posted filter; r<seconds> = posted within last N seconds
+        // scanLookbackDays=0 means "all time" (no time filter)
+        val timeFilter = when (prefs.scanLookbackDays) {
+            0    -> ""                          // all time
+            1    -> "&f_TPR=r86400"             // last 24h
+            3    -> "&f_TPR=r259200"            // last 3 days
+            7    -> "&f_TPR=r604800"            // last week
+            14   -> "&f_TPR=r1209600"           // last 2 weeks
+            30   -> "&f_TPR=r2592000"           // last month
+            else -> "&f_TPR=r${prefs.scanLookbackDays * 86400}"
+        }
+
         return "https://www.linkedin.com/jobs/search/" +
                 "?keywords=${URLEncoder.encode(keywords, "UTF-8")}" +
                 "&location=${URLEncoder.encode(location, "UTF-8")}" +
                 workType +
                 salaryFilter +
                 "&sortBy=DD" +
-                "&f_TPR=r86400" // last 24 h
+                timeFilter
     }
 }

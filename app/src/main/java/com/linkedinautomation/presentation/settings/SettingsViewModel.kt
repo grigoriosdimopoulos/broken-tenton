@@ -74,7 +74,7 @@ class SettingsViewModel @Inject constructor(
         keywords: List<String>, location: String,
         remoteOnly: Boolean, hybridOk: Boolean, onsiteOk: Boolean,
         excludeKeywords: List<String>, excludeCompanies: List<String>,
-        minSalary: Int = 0
+        minSalary: Int = 0, scanLookbackDays: Int = 1
     ) {
         viewModelScope.launch {
             val current = prefsRepo.get()
@@ -82,7 +82,7 @@ class SettingsViewModel @Inject constructor(
                 jobKeywords = keywords, location = location,
                 remoteOnly = remoteOnly, hybridOk = hybridOk, onsiteOk = onsiteOk,
                 excludeKeywords = excludeKeywords, excludeCompanies = excludeCompanies,
-                minSalary = minSalary
+                minSalary = minSalary, scanLookbackDays = scanLookbackDays
             ))
         }
     }

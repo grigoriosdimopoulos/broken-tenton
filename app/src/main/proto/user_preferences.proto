@@ -44,4 +44,5 @@ message UserPreferencesProto {
     string linked_in_cookies = 36;
     bool easy_apply_only = 37;
     bool ai_assist_fallback = 38;
+    int32 scan_lookback_days = 39;
 }

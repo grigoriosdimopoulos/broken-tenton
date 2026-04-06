@@ -49,5 +49,7 @@ data class UserPreferences(
     // Only apply to Easy Apply jobs; skip external applications
     val easyApplyOnly: Boolean = false,
     // Feature flag: if Easy Apply fails after all retries, use Claude AI to help fill the form
-    val aiAssistFallback: Boolean = false
+    val aiAssistFallback: Boolean = false,
+    // How many days back to search for new jobs (1 = last 24h, 7 = last week, 0 = all time)
+    val scanLookbackDays: Int = 1
 )

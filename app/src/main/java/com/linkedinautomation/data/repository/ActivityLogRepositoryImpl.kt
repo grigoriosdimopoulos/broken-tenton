@@ -18,13 +18,19 @@ class ActivityLogRepositoryImpl @Inject constructor(
     override fun observeAll(): Flow<List<ActivityLog>> =
         dao.observeAll().map { list -> list.map { it.toDomain() } }
 
-    override suspend fun log(action: ActivityAction, details: String, url: String?) {
+    override suspend fun log(
+        action: ActivityAction,
+        details: String,
+        url: String?,
+        screenshotPath: String?
+    ) {
         dao.insert(
             ActivityLogEntity(
                 action = action.name,
                 details = details,
                 url = url,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                screenshotPath = screenshotPath
             )
         )
     }

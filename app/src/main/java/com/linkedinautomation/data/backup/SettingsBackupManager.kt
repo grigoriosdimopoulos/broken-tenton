@@ -51,6 +51,7 @@ class SettingsBackupManager @Inject constructor(
             put("linkedInCookies", prefs.linkedInCookies)
             put("easyApplyOnly", prefs.easyApplyOnly)
             put("aiAssistFallback", prefs.aiAssistFallback)
+            put("scanLookbackDays", prefs.scanLookbackDays)
 
             // ── Source ─────────────────────────────────────────────────
             put("sourceMode", prefs.sourceMode.name)
@@ -129,6 +130,7 @@ class SettingsBackupManager @Inject constructor(
             linkedInCookies = obj.optString("linkedInCookies", ""),
             easyApplyOnly = obj.optBoolean("easyApplyOnly", false),
             aiAssistFallback = obj.optBoolean("aiAssistFallback", false),
+            scanLookbackDays = obj.optInt("scanLookbackDays", 1),
 
             // Source
             sourceMode = runCatching {

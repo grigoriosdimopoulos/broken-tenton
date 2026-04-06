@@ -11,14 +11,16 @@ data class ActivityLogEntity(
     val action: String,
     val details: String,
     val url: String? = null,
-    val timestamp: Long
+    val timestamp: Long,
+    val screenshotPath: String? = null
 ) {
     fun toDomain() = ActivityLog(
         id = id,
-        action = ActivityAction.valueOf(action),
+        action = runCatching { ActivityAction.valueOf(action) }.getOrElse { ActivityAction.APPLICATION_FAILED },
         details = details,
         url = url,
-        timestamp = timestamp
+        timestamp = timestamp,
+        screenshotPath = screenshotPath
     )
 
     companion object {
@@ -27,7 +29,8 @@ data class ActivityLogEntity(
             action = log.action.name,
             details = log.details,
             url = log.url,
-            timestamp = log.timestamp
+            timestamp = log.timestamp,
+            screenshotPath = log.screenshotPath
         )
     }
 }
