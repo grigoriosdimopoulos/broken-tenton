@@ -27,54 +27,72 @@ class SetupViewModel @Inject constructor(
     private val _prefs = MutableStateFlow(UserPreferences())
     val prefs: StateFlow<UserPreferences> = _prefs
 
+    // Tracks whether the user has made any manual edits during this session.
+    // Once they start editing we stop overwriting with repo data.
+    private var userHasEdited = false
+
     private val _setupDone = MutableStateFlow(false)
     val setupDone: StateFlow<Boolean> = _setupDone
 
     init {
-        // Pre-fill from any previously saved/imported prefs (e.g. after "Restore from Backup")
+        // Observe the DataStore so that data restored via backup import is immediately
+        // reflected in the setup screens without requiring a ViewModel restart.
         viewModelScope.launch {
-            val saved = prefsRepo.get()
-            // Only pre-fill if there's meaningful saved data
-            if (saved.firstName.isNotBlank() || saved.jobKeywords.isNotEmpty() ||
-                saved.linkedInCookies.isNotBlank()) {
-                _prefs.value = saved.copy(isSetupComplete = false)
+            prefsRepo.observe().collect { saved ->
+                if (!userHasEdited) {
+                    val hasData = saved.firstName.isNotBlank() ||
+                        saved.jobKeywords.isNotEmpty() ||
+                        saved.linkedInCookies.isNotBlank() ||
+                        saved.claudeApiKey.isNotBlank()
+                    if (hasData) {
+                        _prefs.value = saved.copy(isSetupComplete = false)
+                    }
+                }
             }
         }
     }
 
     fun setSourceMode(mode: SourceMode) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(sourceMode = mode)
     }
 
     fun setCredentials(email: String, password: String) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(linkedInEmail = email, linkedInPassword = password)
     }
 
     fun setSelectedJobBoards(boards: List<JobBoardSource>) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(selectedJobBoards = boards)
     }
 
     fun setJobKeywords(keywords: List<String>) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(jobKeywords = keywords)
     }
 
     fun setLocation(location: String, remoteOnly: Boolean, hybridOk: Boolean, onsiteOk: Boolean) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(
             location = location, remoteOnly = remoteOnly, hybridOk = hybridOk, onsiteOk = onsiteOk
         )
     }
 
     fun setMinSalary(minSalary: Int) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(minSalary = minSalary)
     }
 
     fun setFilters(jobTypes: List<String>, experienceLevels: List<String>, industries: List<String>) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(
             jobTypes = jobTypes, experienceLevels = experienceLevels, targetIndustries = industries
         )
     }
 
     fun setExclusions(keywords: List<String>, companies: List<String>) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(excludeKeywords = keywords, excludeCompanies = companies)
     }
 
@@ -84,6 +102,7 @@ class SetupViewModel @Inject constructor(
         currentJobTitle: String, yearsOfExperience: Int,
         email: String = ""
     ) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(
             firstName = firstName,
             lastName = lastName,
@@ -98,10 +117,12 @@ class SetupViewModel @Inject constructor(
     }
 
     fun setExperienceBio(bio: String) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(experienceBio = bio)
     }
 
     fun setClaudeSetup(apiKey: String, persona: ClaudePersona) {
+        userHasEdited = true
         _prefs.value = _prefs.value.copy(claudeApiKey = apiKey, claudePersona = persona)
     }
 
@@ -124,6 +145,7 @@ class SetupViewModel @Inject constructor(
             )
             savePrefsUseCase(finalPrefs)
             workScheduler.schedule(finalPrefs.scanIntervalMinutes)
+            userHasEdited = false
             _setupDone.value = true
         }
     }
