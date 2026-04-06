@@ -241,13 +241,31 @@ fun PersonalInfoScreen(
 
 // ─── Job Preferences Screen ───────────────────────────────────────────────────
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun JobPreferencesScreen(
     keywords: List<String>, location: String, remoteOnly: Boolean, hybridOk: Boolean, onsiteOk: Boolean,
+    minSalary: Int = 0,
     onKeywordsChange: (List<String>) -> Unit, onLocationChange: (String) -> Unit,
     onRemoteChange: (Boolean) -> Unit, onHybridChange: (Boolean) -> Unit, onOnsiteChange: (Boolean) -> Unit,
+    onMinSalaryChange: (Int) -> Unit = {},
     onNext: () -> Unit
 ) {
+    val salaryOptions = listOf(
+        0 to "No minimum",
+        40 to "\$40,000+",
+        60 to "\$60,000+",
+        80 to "\$80,000+",
+        100 to "\$100,000+",
+        120 to "\$120,000+",
+        140 to "\$140,000+",
+        160 to "\$160,000+",
+        180 to "\$180,000+",
+        200 to "\$200,000+"
+    )
     var keywordInput by remember { mutableStateOf(keywords.joinToString(", ")) }
+    var salaryExpanded by remember { mutableStateOf(false) }
+    val selectedSalaryLabel = salaryOptions.firstOrNull { it.first == minSalary }?.second ?: "No minimum"
+
     Column(modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
         Text("Job Preferences", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(24.dp))
@@ -265,6 +283,26 @@ fun JobPreferencesScreen(
         if (!remoteOnly) {
             ToggleRow("Hybrid OK", checked = hybridOk, onCheckedChange = onHybridChange)
             ToggleRow("On-site OK", checked = onsiteOk, onCheckedChange = onOnsiteChange)
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Minimum Salary", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(expanded = salaryExpanded, onExpandedChange = { salaryExpanded = it }) {
+            OutlinedTextField(
+                value = selectedSalaryLabel,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Minimum Annual Salary") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(salaryExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(expanded = salaryExpanded, onDismissRequest = { salaryExpanded = false }) {
+                salaryOptions.forEach { (value, label) ->
+                    DropdownMenuItem(text = { Text(label) }, onClick = {
+                        onMinSalaryChange(value); salaryExpanded = false
+                    })
+                }
+            }
         }
         Spacer(Modifier.height(32.dp))
         Button(onClick = onNext, enabled = keywords.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Continue") }

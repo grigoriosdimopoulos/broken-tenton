@@ -71,14 +71,16 @@ class SettingsViewModel @Inject constructor(
     fun updateJobPrefs(
         keywords: List<String>, location: String,
         remoteOnly: Boolean, hybridOk: Boolean, onsiteOk: Boolean,
-        excludeKeywords: List<String>, excludeCompanies: List<String>
+        excludeKeywords: List<String>, excludeCompanies: List<String>,
+        minSalary: Int = 0
     ) {
         viewModelScope.launch {
             val current = prefsRepo.get()
             savePrefsUseCase(current.copy(
                 jobKeywords = keywords, location = location,
                 remoteOnly = remoteOnly, hybridOk = hybridOk, onsiteOk = onsiteOk,
-                excludeKeywords = excludeKeywords, excludeCompanies = excludeCompanies
+                excludeKeywords = excludeKeywords, excludeCompanies = excludeCompanies,
+                minSalary = minSalary
             ))
         }
     }

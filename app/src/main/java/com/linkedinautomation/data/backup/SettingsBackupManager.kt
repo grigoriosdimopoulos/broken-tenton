@@ -63,6 +63,7 @@ class SettingsBackupManager @Inject constructor(
             put("targetIndustries", JSONArray(prefs.targetIndustries))
             put("excludeKeywords", JSONArray(prefs.excludeKeywords))
             put("excludeCompanies", JSONArray(prefs.excludeCompanies))
+            put("minSalary", prefs.minSalary)
 
             // ── Experience Bio ─────────────────────────────────────────
             put("experienceBio", prefs.experienceBio)
@@ -140,6 +141,7 @@ class SettingsBackupManager @Inject constructor(
             targetIndustries = obj.optJSONArray("targetIndustries")?.toStringList() ?: emptyList(),
             excludeKeywords = obj.optJSONArray("excludeKeywords")?.toStringList() ?: emptyList(),
             excludeCompanies = obj.optJSONArray("excludeCompanies")?.toStringList() ?: emptyList(),
+            minSalary = obj.optInt("minSalary", 0),
 
             // Bio
             experienceBio = obj.optString("experienceBio"),

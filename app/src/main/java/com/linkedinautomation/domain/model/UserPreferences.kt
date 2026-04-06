@@ -39,5 +39,7 @@ data class UserPreferences(
     val country: String = "",
     val linkedInUrl: String = "",
     val currentJobTitle: String = "",
-    val yearsOfExperience: Int = 0
+    val yearsOfExperience: Int = 0,
+    // Salary filter (minimum, in thousands USD; 0 = no minimum)
+    val minSalary: Int = 0
 )

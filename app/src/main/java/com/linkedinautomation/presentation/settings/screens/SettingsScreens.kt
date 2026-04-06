@@ -225,6 +225,7 @@ fun SettingsCredentialsScreen(
 }
 
 // ─── Settings: Job Preferences ────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsJobPrefsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -238,6 +239,22 @@ fun SettingsJobPrefsScreen(
     var onsiteOk by remember(prefs) { mutableStateOf(prefs?.onsiteOk ?: true) }
     var exclKw by remember(prefs) { mutableStateOf(prefs?.excludeKeywords?.joinToString(", ") ?: "") }
     var exclCo by remember(prefs) { mutableStateOf(prefs?.excludeCompanies?.joinToString(", ") ?: "") }
+    var minSalary by remember(prefs) { mutableStateOf(prefs?.minSalary ?: 0) }
+    var salaryExpanded by remember { mutableStateOf(false) }
+
+    val salaryOptions = listOf(
+        0 to "No minimum",
+        40 to "\$40,000+",
+        60 to "\$60,000+",
+        80 to "\$80,000+",
+        100 to "\$100,000+",
+        120 to "\$120,000+",
+        140 to "\$140,000+",
+        160 to "\$160,000+",
+        180 to "\$180,000+",
+        200 to "\$200,000+"
+    )
+    val selectedSalaryLabel = salaryOptions.firstOrNull { it.first == minSalary }?.second ?: "No minimum"
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -258,6 +275,26 @@ fun SettingsJobPrefsScreen(
             ToggleRow("On-site OK", checked = onsiteOk, onCheckedChange = { onsiteOk = it })
         }
         Spacer(Modifier.height(12.dp))
+        Text("Minimum Salary", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(expanded = salaryExpanded, onExpandedChange = { salaryExpanded = it }) {
+            OutlinedTextField(
+                value = selectedSalaryLabel,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Minimum Annual Salary") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(salaryExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(expanded = salaryExpanded, onDismissRequest = { salaryExpanded = false }) {
+                salaryOptions.forEach { (value, label) ->
+                    DropdownMenuItem(text = { Text(label) }, onClick = {
+                        minSalary = value; salaryExpanded = false
+                    })
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(value = exclKw, onValueChange = { exclKw = it }, label = { Text("Exclude keywords in title") },
             modifier = Modifier.fillMaxWidth(), supportingText = { Text("Comma-separated") })
         Spacer(Modifier.height(12.dp))
@@ -269,7 +306,8 @@ fun SettingsJobPrefsScreen(
                 keywords.split(",").map { it.trim() }.filter { it.isNotBlank() },
                 location, remoteOnly, hybridOk, onsiteOk,
                 exclKw.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                exclCo.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                exclCo.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                minSalary
             )
             onBack()
         }, modifier = Modifier.fillMaxWidth()) { Text("Save") }

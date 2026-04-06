@@ -83,7 +83,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         country = country,
         linkedInUrl = linkedInUrl,
         currentJobTitle = currentJobTitle,
-        yearsOfExperience = yearsOfExperience
+        yearsOfExperience = yearsOfExperience,
+        minSalary = minSalary
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -121,5 +122,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setLinkedInUrl(linkedInUrl)
             .setCurrentJobTitle(currentJobTitle)
             .setYearsOfExperience(yearsOfExperience)
+            .setMinSalary(minSalary)
             .build()
 }

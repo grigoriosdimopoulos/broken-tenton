@@ -50,6 +50,10 @@ class SetupViewModel @Inject constructor(
         )
     }
 
+    fun setMinSalary(minSalary: Int) {
+        _prefs.value = _prefs.value.copy(minSalary = minSalary)
+    }
+
     fun setFilters(jobTypes: List<String>, experienceLevels: List<String>, industries: List<String>) {
         _prefs.value = _prefs.value.copy(
             jobTypes = jobTypes, experienceLevels = experienceLevels, targetIndustries = industries

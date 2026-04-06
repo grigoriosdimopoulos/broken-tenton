@@ -157,11 +157,13 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                     remoteOnly = prefs.remoteOnly,
                     hybridOk = prefs.hybridOk,
                     onsiteOk = prefs.onsiteOk,
+                    minSalary = prefs.minSalary,
                     onKeywordsChange = { setupVm.setJobKeywords(it) },
                     onLocationChange = { setupVm.setLocation(it, prefs.remoteOnly, prefs.hybridOk, prefs.onsiteOk) },
                     onRemoteChange = { setupVm.setLocation(prefs.location, it, prefs.hybridOk, prefs.onsiteOk) },
                     onHybridChange = { setupVm.setLocation(prefs.location, prefs.remoteOnly, it, prefs.onsiteOk) },
                     onOnsiteChange = { setupVm.setLocation(prefs.location, prefs.remoteOnly, prefs.hybridOk, it) },
+                    onMinSalaryChange = { setupVm.setMinSalary(it) },
                     onNext = { navController.navigate(Screen.Exclusions.route) }
                 )
             }
