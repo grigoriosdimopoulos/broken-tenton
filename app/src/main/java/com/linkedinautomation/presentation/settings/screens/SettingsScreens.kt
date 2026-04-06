@@ -194,37 +194,67 @@ fun SettingsPersonalInfoScreen(
     }
 }
 
-// ─── Settings: Credentials ────────────────────────────────────────────────────
+// ─── Settings: Credentials (cookie-based LinkedIn auth) ──────────────────────
 @Composable
 fun SettingsCredentialsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    onSignIn: () -> Unit,
     onBack: () -> Unit
 ) {
     val prefs by viewModel.prefs.collectAsState(null)
-    var email by remember(prefs) { mutableStateOf(prefs?.linkedInEmail ?: "") }
-    var password by remember(prefs) { mutableStateOf(prefs?.linkedInPassword ?: "") }
-    var showPassword by remember { mutableStateOf(false) }
+    val hasCookies = (prefs?.linkedInCookies?.isNotBlank()) == true
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null) }
-            Text("LinkedIn Credentials", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("LinkedIn Account", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("LinkedIn Email") },
-            leadingIcon = { Icon(Icons.Default.Email, null) },
-            modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Default.Lock, null) },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) {
-                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-            }}, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(24.dp))
-        Button(onClick = { viewModel.updateCredentials(email, password); onBack() },
-            enabled = email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Text("Save")
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("How it works", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Instead of storing your password, this app opens a real LinkedIn login page. " +
+                    "You sign in normally in that screen, and the app saves your session cookie — " +
+                    "the same way your browser stays logged in. Your password never touches this app.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        if (hasCookies) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("LinkedIn session active", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
+                Text("Re-authenticate")
+            }
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Not signed in — automation will not work", color = MaterialTheme.colorScheme.error)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
+                Text("Sign in to LinkedIn")
+            }
         }
     }
 }

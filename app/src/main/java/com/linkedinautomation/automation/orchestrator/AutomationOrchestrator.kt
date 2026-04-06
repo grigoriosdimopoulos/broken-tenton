@@ -2,6 +2,7 @@ package com.linkedinautomation.automation.orchestrator
 
 import android.content.Context
 import android.util.Log
+import android.webkit.CookieManager
 import com.linkedinautomation.automation.ai.ClaudeAnswerGenerator
 import com.linkedinautomation.automation.engine.AutomationWebEngine
 import com.linkedinautomation.automation.engine.UrlAllowlist
@@ -192,23 +193,30 @@ class AutomationOrchestrator @Inject constructor(
     fun resume() { if (_state.value is AutomationState.Paused) _state.value = AutomationState.Idle }
 
     private suspend fun performLogin(engine: AutomationWebEngine, prefs: UserPreferences) {
-        _state.value = AutomationState.Running("Logging in to LinkedIn...")
-        log("Logging in to LinkedIn...")
-        activityRepo.log(ActivityAction.LOGIN_ATTEMPT, "LinkedIn login attempt")
-        engine.navigateTo("https://www.linkedin.com/login", 15_000)
-        delay(1000)
-        val script = jsLoader.loadAndSubstitute(
-            ScriptRegistry.LINKEDIN_LOGIN,
-            mapOf("EMAIL" to prefs.linkedInEmail, "PASSWORD" to prefs.linkedInPassword)
-        )
-        val result = engine.runJs("login", script, 10_000)
-        if (result.contains("error", ignoreCase = true)) {
-            activityRepo.log(ActivityAction.LOGIN_FAILURE, result)
-            throw RuntimeException("LinkedIn login failed: $result")
+        if (prefs.linkedInCookies.isBlank()) {
+            activityRepo.log(ActivityAction.LOGIN_FAILURE, "No LinkedIn session cookies stored. Please sign in via Settings → Account.")
+            throw RuntimeException("No LinkedIn cookies — open Settings → Account to sign in")
         }
-        delay(3000) // wait for redirect
-        activityRepo.log(ActivityAction.LOGIN_SUCCESS, "Login successful")
-        log("Login successful")
+
+        _state.value = AutomationState.Running("Restoring LinkedIn session...")
+        log("Injecting LinkedIn session cookies...")
+        activityRepo.log(ActivityAction.LOGIN_ATTEMPT, "Injecting stored LinkedIn cookies")
+
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        // Inject each cookie for .linkedin.com
+        prefs.linkedInCookies.split(";").map { it.trim() }.filter { it.isNotBlank() }.forEach { cookie ->
+            cookieManager.setCookie(".linkedin.com", cookie)
+            cookieManager.setCookie("https://www.linkedin.com", cookie)
+        }
+        cookieManager.flush()
+
+        // Navigate to LinkedIn jobs to verify session is valid
+        engine.navigateTo("https://www.linkedin.com/jobs/", 15_000)
+        delay(2000)
+
+        activityRepo.log(ActivityAction.LOGIN_SUCCESS, "LinkedIn session restored via cookies")
+        log("LinkedIn session active")
     }
 
     private suspend fun applyToJob(
@@ -667,31 +675,45 @@ class AutomationOrchestrator @Inject constructor(
 
     /**
      * Returns true if the job's listed location is compatible with the user's preferred location.
-     * - If the user has no location preference: always true
-     * - If the job location is unknown/blank: let it through (can't verify)
-     * - Remote/Anywhere jobs: allowed only if user allows remote or hybrid
-     * - Otherwise: job location must contain at least one significant word from the user's location
+     * Uses LAST-COMPONENT matching to avoid false positives like "Greece, NY" when the user
+     * wants Greece (country). Format "City, Country" → only the COUNTRY (last part) is checked.
      */
     private fun locationMatches(job: ScrapedJob, prefs: UserPreferences): Boolean {
         if (prefs.location.isBlank()) return true
         val jobLoc = job.location.lowercase().trim()
+
         // LinkedIn extracts location from job cards — reject blank.
-        // Direct-mode boards (Indeed, Monster, etc.) use URL-based location search,
-        // so a blank scraped location just means we didn't extract it, not that it's remote.
+        // Direct-mode boards rely on URL-based location search, so blank scraped location
+        // means we couldn't extract it (not that it's remote). Trust URL filter for those.
         if (jobLoc.isBlank()) return job.source != "LinkedIn"
 
-        // Remote/Anywhere jobs
+        // Remote/Anywhere jobs — allow only if user accepts remote/hybrid
         if (jobLoc.contains("remote") || jobLoc.contains("anywhere") ||
             jobLoc.contains("worldwide") || jobLoc.contains("global")) {
             return prefs.remoteOnly || prefs.hybridOk
         }
 
-        // Match: at least one meaningful word from user's location appears in job location
+        // Build user location words (3+ chars)
         val userWords = prefs.location.lowercase()
             .split(",", " ", "-")
             .map { it.trim() }
             .filter { it.length >= 3 }
-        return userWords.any { word -> jobLoc.contains(word) }
+
+        // Split job location into components, e.g. "Athens, Greece" → ["athens", "greece"]
+        //                                             "Greece, NY"    → ["greece", "ny"]
+        val jobParts = jobLoc.split(",").map { it.trim() }
+
+        // PRIMARY CHECK: match against the LAST component (typically country or state)
+        // "Athens, Greece" last = "greece" → matches "Greece" ✓
+        // "Greece, NY"     last = "ny"     → does NOT match "Greece" ✓
+        val lastPart = jobParts.last()
+        if (userWords.any { word -> lastPart.contains(word) }) return true
+
+        // SECONDARY CHECK: if job location has only ONE component (e.g. "Greece", "Remote")
+        // match against the full string
+        if (jobParts.size == 1 && userWords.any { word -> jobLoc.contains(word) }) return true
+
+        return false
     }
 
     @Suppress("UNCHECKED_CAST")

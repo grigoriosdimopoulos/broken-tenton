@@ -48,6 +48,7 @@ class SettingsBackupManager @Inject constructor(
             // ── Credentials ────────────────────────────────────────────
             put("linkedInEmail", prefs.linkedInEmail)
             put("linkedInPassword", prefs.linkedInPassword)
+            put("linkedInCookies", prefs.linkedInCookies)
 
             // ── Source ─────────────────────────────────────────────────
             put("sourceMode", prefs.sourceMode.name)
@@ -123,6 +124,7 @@ class SettingsBackupManager @Inject constructor(
             // Credentials
             linkedInEmail = obj.optString("linkedInEmail"),
             linkedInPassword = obj.optString("linkedInPassword"),
+            linkedInCookies = obj.optString("linkedInCookies", ""),
 
             // Source
             sourceMode = runCatching {

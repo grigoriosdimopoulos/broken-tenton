@@ -46,6 +46,10 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         dataStore.updateData { it.toBuilder().setRequireApproval(requireApproval).build() }
     }
 
+    override suspend fun setLinkedInCookies(cookies: String) {
+        dataStore.updateData { it.toBuilder().setLinkedInCookies(cookies).build() }
+    }
+
     private fun com.linkedinautomation.UserPreferencesProto.toDomain() = UserPreferences(
         isSetupComplete = isSetupComplete,
         sourceMode = if (sourceMode == "DIRECT") SourceMode.DIRECT else SourceMode.LINKEDIN,
@@ -85,7 +89,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         currentJobTitle = currentJobTitle,
         yearsOfExperience = yearsOfExperience,
         minSalary = minSalary,
-        email = email
+        email = email,
+        linkedInCookies = linkedInCookies
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -125,5 +130,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setYearsOfExperience(yearsOfExperience)
             .setMinSalary(minSalary)
             .setEmail(email)
+            .setLinkedInCookies(linkedInCookies)
             .build()
 }

@@ -21,6 +21,9 @@ sealed class Screen(val route: String) {
     object History : Screen("main/history")
     object Settings : Screen("main/settings")
 
+    // LinkedIn cookie login
+    object LinkedInLogin : Screen("linkedin/login")
+
     // Settings sub-screens
     object ClaudePersona : Screen("settings/claude_persona")
     object SettingsPersonalInfo : Screen("settings/personal_info")

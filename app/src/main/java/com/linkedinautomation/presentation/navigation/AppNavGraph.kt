@@ -17,6 +17,7 @@ import com.linkedinautomation.presentation.monitor.MonitorScreen
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.linkedinautomation.presentation.applicationdetail.ApplicationDetailScreen
+import com.linkedinautomation.presentation.linkedinlogin.LinkedInLoginScreen
 import com.linkedinautomation.presentation.settings.SettingsViewModel
 import com.linkedinautomation.presentation.settings.screens.*
 import com.linkedinautomation.presentation.setup.SetupViewModel
@@ -86,8 +87,9 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                 LaunchedEffect(importResult) {
                     if (importResult == true) {
                         settingsVm.clearBackupState()
-                        navController.navigate(Screen.Dashboard.route) {
-                            popUpTo(Screen.Welcome.route) { inclusive = true }
+                        // After restore: go through setup (pre-filled) rather than jumping to Dashboard
+                        navController.navigate(Screen.SourceMode.route) {
+                            popUpTo(Screen.Welcome.route) { inclusive = false }
                         }
                     }
                 }
@@ -111,13 +113,9 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                 )
             }
             composable(Screen.Credentials.route) {
-                val prefs by setupVm.prefs.collectAsState()
-                CredentialsScreen(
-                    email = prefs.linkedInEmail,
-                    password = prefs.linkedInPassword,
-                    onEmailChange = { setupVm.setCredentials(it, prefs.linkedInPassword) },
-                    onPasswordChange = { setupVm.setCredentials(prefs.linkedInEmail, it) },
-                    onNext = { navController.navigate(Screen.PersonalInfo.route) }
+                LinkedInLoginScreen(
+                    onSuccess = { navController.navigate(Screen.PersonalInfo.route) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.JobBoardSelection.route) {
@@ -254,7 +252,10 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                 SettingsPersonalInfoScreen(onBack = { navController.popBackStack() })
             }
             composable(Screen.SettingsCredentials.route) {
-                SettingsCredentialsScreen(onBack = { navController.popBackStack() })
+                SettingsCredentialsScreen(
+                    onSignIn = { navController.navigate(Screen.LinkedInLogin.route) },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.SettingsJobPrefs.route) {
                 SettingsJobPrefsScreen(onBack = { navController.popBackStack() })
@@ -264,6 +265,14 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             }
             composable(Screen.SettingsBackup.route) {
                 SettingsBackupScreen(onBack = { navController.popBackStack() })
+            }
+
+            // ── LinkedIn Login (cookie-based) ───────────────────────────
+            composable(Screen.LinkedInLogin.route) {
+                LinkedInLoginScreen(
+                    onSuccess = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() }
+                )
             }
 
             // ── Application Detail ──────────────────────────────────────

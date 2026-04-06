@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.linkedinautomation.background.worker.WorkScheduler
 import com.linkedinautomation.domain.model.*
+import com.linkedinautomation.domain.repository.UserPreferencesRepository
 import com.linkedinautomation.domain.usecase.SaveUserPreferencesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -19,6 +20,7 @@ import javax.inject.Inject
 class SetupViewModel @Inject constructor(
     private val savePrefsUseCase: SaveUserPreferencesUseCase,
     private val workScheduler: WorkScheduler,
+    private val prefsRepo: UserPreferencesRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -27,6 +29,18 @@ class SetupViewModel @Inject constructor(
 
     private val _setupDone = MutableStateFlow(false)
     val setupDone: StateFlow<Boolean> = _setupDone
+
+    init {
+        // Pre-fill from any previously saved/imported prefs (e.g. after "Restore from Backup")
+        viewModelScope.launch {
+            val saved = prefsRepo.get()
+            // Only pre-fill if there's meaningful saved data
+            if (saved.firstName.isNotBlank() || saved.jobKeywords.isNotEmpty() ||
+                saved.linkedInCookies.isNotBlank()) {
+                _prefs.value = saved.copy(isSetupComplete = false)
+            }
+        }
+    }
 
     fun setSourceMode(mode: SourceMode) {
         _prefs.value = _prefs.value.copy(sourceMode = mode)

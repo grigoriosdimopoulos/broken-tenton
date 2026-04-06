@@ -43,5 +43,7 @@ data class UserPreferences(
     // Salary filter (minimum, in thousands USD; 0 = no minimum)
     val minSalary: Int = 0,
     // Email for application forms
-    val email: String = ""
+    val email: String = "",
+    // Stored LinkedIn session cookies (replaces plaintext email/password login)
+    val linkedInCookies: String = ""
 )

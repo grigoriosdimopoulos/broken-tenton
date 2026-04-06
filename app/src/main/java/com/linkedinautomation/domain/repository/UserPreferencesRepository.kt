@@ -11,4 +11,5 @@ interface UserPreferencesRepository {
     suspend fun savePersona(persona: ClaudePersona)
     suspend fun setAutomationEnabled(enabled: Boolean)
     suspend fun setRequireApproval(requireApproval: Boolean)
+    suspend fun setLinkedInCookies(cookies: String)
 }

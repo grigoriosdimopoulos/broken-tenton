@@ -161,7 +161,10 @@ class AutomationWebEngine(
                 val h = wv.height.coerceAtLeast(targetH)
                 val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(bitmap)
+                // Software rendering required for WebView.draw() in background/headless contexts
+                wv.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                 wv.draw(canvas)
+                wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
                 FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
                 bitmap.recycle()
