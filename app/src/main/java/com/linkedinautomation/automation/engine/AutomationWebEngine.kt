@@ -143,10 +143,15 @@ class AutomationWebEngine(
     }
 
     /**
-     * Captures the current WebView content as a PNG screenshot.
-     * Uses WebView.capturePicture() which works in headless/background service contexts
-     * because it reads from the internal rendering buffer rather than hardware compositing.
-     * Returns the absolute file path on success, null on failure.
+     * Captures the current WebView content as a PNG.
+     *
+     * A headless WebView (not attached to a real window) never paints — draw() and
+     * capturePicture() both return blank bitmaps. The fix is to momentarily attach
+     * the WebView to an invisible WindowManager overlay so the GPU/SW renderer fires,
+     * capture the bitmap, then detach.
+     *
+     * Falls back gracefully if SYSTEM_ALERT_WINDOW is not granted: saves an HTML
+     * text snapshot (.txt) instead so there's still a record of what was shown.
      */
     @Suppress("DEPRECATION")
     suspend fun takeScreenshot(tag: String, screenshotsDir: File): String? =
@@ -158,51 +163,72 @@ class AutomationWebEngine(
                 val targetW = 1080
                 val targetH = 1920
 
-                // Ensure the WebView has been laid out (required for both approaches below)
-                if (wv.width == 0 || wv.height == 0) {
-                    wv.measure(
-                        android.view.View.MeasureSpec.makeMeasureSpec(targetW, android.view.View.MeasureSpec.EXACTLY),
-                        android.view.View.MeasureSpec.makeMeasureSpec(targetH, android.view.View.MeasureSpec.EXACTLY)
-                    )
-                    wv.layout(0, 0, targetW, targetH)
+                wv.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(targetW, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(targetH, android.view.View.MeasureSpec.EXACTLY)
+                )
+                wv.layout(0, 0, targetW, targetH)
+
+                // Strategy 1: attach to WindowManager overlay so the view actually paints
+                val wm = context.getSystemService(android.content.Context.WINDOW_SERVICE)
+                        as? android.view.WindowManager
+                var attachedToWindow = false
+                if (wm != null && android.provider.Settings.canDrawOverlays(context)) {
+                    try {
+                        val params = android.view.WindowManager.LayoutParams(
+                            targetW, targetH,
+                            android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                            android.graphics.PixelFormat.TRANSLUCENT
+                        ).apply { x = -targetW * 2; y = -targetH * 2 } // off-screen
+                        wm.addView(wv, params)
+                        attachedToWindow = true
+                        // Give the renderer one frame to paint
+                        kotlinx.coroutines.delay(300)
+                    } catch (_: Exception) { }
                 }
 
-                val w = wv.width.coerceAtLeast(targetW)
-                val h = wv.height.coerceAtLeast(targetH)
+                return@runCatching try {
+                    val bitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    wv.draw(canvas)
 
-                // Primary: capturePicture() reads from WebKit's internal picture buffer —
-                // it works in background services and doesn't depend on GPU compositing.
-                val picture = wv.capturePicture()
-                val picW = picture.width.takeIf { it > 0 } ?: w
-                val picH = picture.height.takeIf { it > 0 } ?: h
+                    val isBlank = run {
+                        val sample = IntArray(100)
+                        bitmap.getPixels(sample, 0, 10, 0, 0, 10, 10)
+                        sample.all { it == sample[0] }
+                    }
 
-                val bitmap = Bitmap.createBitmap(picW, picH, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bitmap)
-                picture.draw(canvas)
-
-                // Sanity check — if the bitmap is entirely white/black the picture was empty;
-                // fall back to software draw() which we set up in create()
-                val pixels = IntArray(minOf(100, picW * picH))
-                bitmap.getPixels(pixels, 0, picW, 0, 0, minOf(picW, 10), minOf(picH, 10))
-                val allSame = pixels.all { it == pixels[0] }
-                if (allSame && pixels[0] == -1 /* white */ || allSame && pixels[0] == -16777216 /* black */) {
-                    // Picture was blank — try draw() (LAYER_TYPE_SOFTWARE already set in create())
-                    val fallbackBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    val fallbackCanvas = Canvas(fallbackBitmap)
-                    wv.draw(fallbackCanvas)
-                    bitmap.recycle()
-                    val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
-                    FileOutputStream(file).use { fallbackBitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
-                    fallbackBitmap.recycle()
-                    return@runCatching file.absolutePath
+                    if (isBlank) {
+                        // Can't get a real screenshot — save a text page snapshot instead
+                        bitmap.recycle()
+                        saveTextSnapshot(wv, tag, screenshotsDir)
+                    } else {
+                        val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
+                        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
+                        bitmap.recycle()
+                        file.absolutePath
+                    }
+                } finally {
+                    if (attachedToWindow && wm != null) {
+                        runCatching { wm.removeView(wv) }
+                    }
                 }
-
-                val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
-                FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
-                bitmap.recycle()
-                file.absolutePath
             }.getOrNull()
         }
+
+    /** When a real screenshot isn't possible, save the page's URL + visible text as a .txt file. */
+    private fun saveTextSnapshot(wv: WebView, tag: String, dir: File): String? {
+        return runCatching {
+            val url = wv.url ?: "unknown"
+            val title = wv.title ?: "unknown"
+            val file = File(dir, "${tag}_${System.currentTimeMillis()}.txt")
+            file.writeText("URL: $url\nTitle: $title\n[Screenshot unavailable — grant 'Display over other apps' permission in Android Settings for real screenshots]")
+            file.absolutePath
+        }.getOrNull()
+    }
 
     fun destroy() {
         webView?.destroy()

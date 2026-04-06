@@ -209,24 +209,43 @@ fun ApplicationDetailScreen(
             }
         }
 
-        // Screenshot
+        // Screenshot or text snapshot
         val screenshotPath = application.screenshotPath
         if (!screenshotPath.isNullOrBlank() && File(screenshotPath).exists()) {
             Spacer(Modifier.height(12.dp))
-            val bitmap = remember(screenshotPath) {
-                runCatching { BitmapFactory.decodeFile(screenshotPath)?.asImageBitmap() }.getOrNull()
-            }
-            if (bitmap != null) {
-                Text("Application Screenshot", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(6.dp))
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = "Screenshot of application page",
-                        modifier = Modifier.fillMaxWidth(),
-                        contentScale = ContentScale.FillWidth
-                    )
+            if (screenshotPath.endsWith(".txt")) {
+                // Text snapshot (used when overlay permission is not granted)
+                val snapshotText = remember(screenshotPath) {
+                    runCatching { File(screenshotPath).readText() }.getOrNull()
+                }
+                if (!snapshotText.isNullOrBlank()) {
+                    Text("Page Snapshot", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(6.dp))
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = snapshotText,
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            } else {
+                val bitmap = remember(screenshotPath) {
+                    runCatching { BitmapFactory.decodeFile(screenshotPath)?.asImageBitmap() }.getOrNull()
+                }
+                if (bitmap != null) {
+                    Text("Application Screenshot", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(6.dp))
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Screenshot of application page",
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.FillWidth
+                        )
+                    }
                 }
             }
         }

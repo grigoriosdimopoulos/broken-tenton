@@ -33,18 +33,50 @@ fun SettingsScreen(
     onNavigateToPersonalInfo: () -> Unit = {},
     onNavigateToBackup: () -> Unit = {}
 ) {
+    val ctx = LocalContext.current
+    val canDrawOverlays = remember { android.provider.Settings.canDrawOverlays(ctx) }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
+
+        if (!canDrawOverlays) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Row(
+                    Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.PhotoCamera, null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Screenshots disabled", style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        Text("Grant \"Display over other apps\" so screenshots can be captured during automation.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:${ctx.packageName}")
+                        )
+                        ctx.startActivity(intent)
+                    }) { Text("Grant") }
+                }
+            }
+        }
 
         SettingsSection("Personal Info") {
             SettingsItem("Your Details", "Name, phone, location — used in application forms", Icons.Default.Person, onNavigateToPersonalInfo)
         }
         SettingsSection("Account & Source") {
-            SettingsItem("LinkedIn Credentials", "Update email and password", Icons.Default.ManageAccounts, onNavigateToAccount)
+            SettingsItem("LinkedIn Account", "Sign in to LinkedIn via secure WebView", Icons.Default.ManageAccounts, onNavigateToAccount)
         }
         SettingsSection("Job Search") {
-            SettingsItem("Job Preferences", "Keywords, location, filters", Icons.Default.Work, onNavigateToJobPrefs)
+            SettingsItem("Job Preferences", "Keywords, location, filters, Easy Apply mode", Icons.Default.Work, onNavigateToJobPrefs)
         }
         SettingsSection("Resume") {
             SettingsItem("Resume PDF", "Update your resume file", Icons.Default.UploadFile, onNavigateToResume)

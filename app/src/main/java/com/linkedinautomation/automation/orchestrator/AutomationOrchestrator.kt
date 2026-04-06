@@ -93,14 +93,28 @@ class AutomationOrchestrator @Inject constructor(
             val filteredJobs = allJobs.filter { job ->
                 val titleLower = job.title.lowercase()
                 val companyLower = job.company.lowercase()
-                if (prefs.easyApplyOnly && !job.isEasyApply) return@filter false
-                prefs.excludeKeywords.none { titleLower.contains(it.lowercase()) } &&
-                prefs.excludeCompanies.none { companyLower.contains(it.lowercase()) } &&
-                locationMatches(job, prefs)
+                if (prefs.easyApplyOnly && !job.isEasyApply) {
+                    log("SKIP [Easy Apply Only] ${job.title} @ ${job.company}")
+                    return@filter false
+                }
+                if (prefs.excludeKeywords.any { titleLower.contains(it.lowercase()) }) {
+                    log("SKIP [Excluded keyword] ${job.title} @ ${job.company}")
+                    return@filter false
+                }
+                if (prefs.excludeCompanies.any { companyLower.contains(it.lowercase()) }) {
+                    log("SKIP [Excluded company] ${job.company}")
+                    return@filter false
+                }
+                val locOk = locationMatches(job, prefs)
+                if (!locOk) {
+                    val reason = if (job.location.isBlank()) "no location extracted" else "location='${job.location}'"
+                    log("SKIP [Location mismatch] ${job.title} @ ${job.company} — $reason (want '${prefs.location}')")
+                }
+                locOk
             }
 
             val skippedLocation = allJobs.size - filteredJobs.size
-            if (skippedLocation > 0) log("Filtered out $skippedLocation jobs outside location '${prefs.location}'")
+            if (skippedLocation > 0) log("Filtered $skippedLocation/${allJobs.size} jobs — see SKIP lines above for details")
 
             log("Processing ${filteredJobs.size} jobs...")
             var appliedCount = 0
@@ -821,8 +835,9 @@ class AutomationOrchestrator @Inject constructor(
      * Returns true if the job's listed location is compatible with the user's preferred location.
      *
      * Strategy:
-     * - Blank job location → REJECT (unknown location = unknown country; do not trust URL filter).
-     *   Exception: if user allows remote AND the board is remote-focused (RemoteOK, WeWorkRemotely).
+     * - Blank job location + LinkedIn → ALLOW: LinkedIn already filtered by location in URL;
+     *   if the card didn't render a location element that's a scraping gap, not a country mismatch.
+     * - Blank job location + other boards → REJECT unless it's a remote-only board.
      * - Remote/worldwide keywords → only accept if user has remoteOnly or hybridOk.
      * - Multi-component "City, Country" format → match ONLY the LAST component so that
      *   "Greece, NY" does NOT match a user searching for "Greece" (the country).
@@ -833,12 +848,15 @@ class AutomationOrchestrator @Inject constructor(
 
         val jobLoc = job.location.lowercase().trim()
 
-        // Blank scraped location: we have no idea where the job is.
-        // NEVER allow this if the user specified a location — it could be anywhere.
-        // Only allow blank-location jobs from boards that are inherently remote-only.
         if (jobLoc.isBlank()) {
+            // LinkedIn does server-side location filtering via the `location=` URL parameter —
+            // if a card came back from that search but the JS couldn't extract a location element,
+            // trust LinkedIn's filter rather than rejecting the job.
+            if (job.source == "LinkedIn") return true
+            // Remote-only boards are inherently location-agnostic
             val isRemoteBoard = job.source == "RemoteOK" || job.source == "WeWorkRemotely"
             return isRemoteBoard && (prefs.remoteOnly || prefs.hybridOk)
+            // For all other direct-scrape boards, unknown location = unknown country → reject
         }
 
         // Remote/anywhere keywords
