@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,12 +23,14 @@ import java.util.*
 @Composable
 fun DashboardScreen(
     onApplicationClick: (Long) -> Unit = {},
+    onGoToPersonalInfo: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val totalApplied by viewModel.totalApplied.collectAsState(0)
     val pendingCount by viewModel.pendingCount.collectAsState(0)
     val thisWeekCount by viewModel.thisWeekCount.collectAsState(0)
     val recentApps by viewModel.recentApplications.collectAsState(emptyList())
+    val personalInfoMissing by viewModel.personalInfoMissing.collectAsState(false)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -37,6 +39,37 @@ fun DashboardScreen(
         item {
             Text("Dashboard", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
+        }
+
+        // Personal info missing warning
+        if (personalInfoMissing) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.PersonOff, null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Personal info not set",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error)
+                            Text("Application forms need your name, phone, etc. Go to Settings → Personal Information.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = onGoToPersonalInfo) { Text("Fix") }
+                    }
+                }
+            }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

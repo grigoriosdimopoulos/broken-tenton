@@ -14,6 +14,7 @@ import com.linkedinautomation.domain.model.ApplicationStatus
 fun StatusBadge(status: ApplicationStatus, modifier: Modifier = Modifier) {
     val (text, color) = when (status) {
         ApplicationStatus.APPLIED -> "Applied" to Color(0xFF057642)
+        ApplicationStatus.SUBMITTED_UNVERIFIED -> "Submitted*" to Color(0xFF5C6BC0)
         ApplicationStatus.FAILED -> "Failed" to Color(0xFFB00020)
         ApplicationStatus.SKIPPED -> "Skipped" to Color.Gray
         ApplicationStatus.PENDING_APPROVAL -> "Pending" to Color(0xFFE67E22)

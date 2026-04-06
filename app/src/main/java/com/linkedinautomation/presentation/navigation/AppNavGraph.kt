@@ -81,7 +81,21 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
         ) {
             // ── Setup Flow ──────────────────────────────────────────────
             composable(Screen.Welcome.route) {
-                WelcomeScreen(onNext = { navController.navigate(Screen.SourceMode.route) })
+                val settingsVm: com.linkedinautomation.presentation.settings.SettingsViewModel = hiltViewModel()
+                val importResult by settingsVm.importResult.collectAsState()
+                LaunchedEffect(importResult) {
+                    if (importResult == true) {
+                        settingsVm.clearBackupState()
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo(Screen.Welcome.route) { inclusive = true }
+                        }
+                    }
+                }
+                WelcomeScreen(
+                    onNext = { navController.navigate(Screen.SourceMode.route) },
+                    onImportRequest = { uri -> settingsVm.importSettings(uri) },
+                    importState = importResult
+                )
             }
             composable(Screen.SourceMode.route) {
                 val prefs by setupVm.prefs.collectAsState()
@@ -202,9 +216,14 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
 
             // ── Main Tabs ───────────────────────────────────────────────
             composable(Screen.Dashboard.route) {
-                DashboardScreen(onApplicationClick = { id ->
-                    navController.navigate(Screen.ApplicationDetail.route(id))
-                })
+                DashboardScreen(
+                    onApplicationClick = { id ->
+                        navController.navigate(Screen.ApplicationDetail.route(id))
+                    },
+                    onGoToPersonalInfo = {
+                        navController.navigate(Screen.SettingsPersonalInfo.route)
+                    }
+                )
             }
             composable(Screen.ApprovalQueue.route) { ApprovalQueueScreen() }
             composable(Screen.Monitor.route) { MonitorScreen() }

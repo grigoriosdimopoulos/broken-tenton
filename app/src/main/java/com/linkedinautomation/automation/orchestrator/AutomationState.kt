@@ -14,5 +14,6 @@ data class ScrapedJob(
     val company: String,
     val isEasyApply: Boolean,
     val url: String,
-    val source: String
+    val source: String,
+    val location: String = ""   // as shown on the job card
 )

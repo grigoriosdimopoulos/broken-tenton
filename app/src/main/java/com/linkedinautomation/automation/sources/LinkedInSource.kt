@@ -14,23 +14,20 @@ class LinkedInSource : JobSource {
 
         // Build work-type filter
         // f_WT=1 → On-site, f_WT=2 → Remote, f_WT=3 → Hybrid
+        // When the user specifies a location and doesn't want remote, exclude remote listings
         val workType = when {
             prefs.remoteOnly -> "&f_WT=2"
-            !prefs.hybridOk && !prefs.onsiteOk -> "&f_WT=2" // fallback to remote if nothing else
-            !prefs.hybridOk -> "&f_WT=1"                   // on-site only
-            !prefs.onsiteOk -> "&f_WT=3"                   // hybrid only
-            else -> "&f_WT=1%2C3"                          // on-site + hybrid (exclude remote)
+            prefs.hybridOk && prefs.onsiteOk -> "&f_WT=1%2C3"  // on-site + hybrid; remote filtered in Kotlin
+            prefs.hybridOk -> "&f_WT=3"                         // hybrid only
+            prefs.onsiteOk -> "&f_WT=1"                         // on-site only
+            else -> "&f_WT=1%2C3"
         }
-
-        // Distance parameter (25 miles / ~40 km from location)
-        val distance = if (!prefs.remoteOnly && location.isNotBlank()) "&distance=25" else ""
 
         return "https://www.linkedin.com/jobs/search/" +
                 "?keywords=${URLEncoder.encode(keywords, "UTF-8")}" +
                 "&location=${URLEncoder.encode(location, "UTF-8")}" +
                 workType +
-                distance +
                 "&sortBy=DD" +
-                "&f_TPR=r86400" // posted in last 24 hours
+                "&f_TPR=r86400" // last 24 h
     }
 }

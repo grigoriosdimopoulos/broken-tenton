@@ -84,13 +84,17 @@ class AutomationOrchestrator @Inject constructor(
                 }
             }
 
-            // Filter excluded
+            // Filter excluded + location mismatch
             val filteredJobs = allJobs.filter { job ->
                 val titleLower = job.title.lowercase()
                 val companyLower = job.company.lowercase()
                 prefs.excludeKeywords.none { titleLower.contains(it.lowercase()) } &&
-                prefs.excludeCompanies.none { companyLower.contains(it.lowercase()) }
+                prefs.excludeCompanies.none { companyLower.contains(it.lowercase()) } &&
+                locationMatches(job, prefs)
             }
+
+            val skippedLocation = allJobs.size - filteredJobs.size
+            if (skippedLocation > 0) log("Filtered out $skippedLocation jobs outside location '${prefs.location}'")
 
             log("Processing ${filteredJobs.size} jobs...")
             var appliedCount = 0
@@ -246,9 +250,10 @@ class AutomationOrchestrator @Inject constructor(
                     val actionResult = engine.runJs("submit", actionScript, 8_000)
                     if (actionResult == "submitted" || actionResult.contains("submitted")) {
                         delay(2000)
-                        recordApplied(job, ApplicationType.EasyApply)
+                        val verified = verifySubmission(engine)
+                        recordApplied(job, ApplicationType.EasyApply, verified)
                         activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED, "${job.title} at ${job.company}")
-                        log("Applied (Easy Apply): ${job.title} @ ${job.company}")
+                        log("Applied (Easy Apply${if (!verified) " — unverified" else ""}): ${job.title} @ ${job.company}")
                         return true
                     }
                     delay(1500)
@@ -345,10 +350,11 @@ class AutomationOrchestrator @Inject constructor(
                 if (submitResult.contains("clicked", ignoreCase = true) ||
                     submitResult.contains("submit", ignoreCase = true)) {
                     delay(2000)
+                    val verified = verifySubmission(engine)
                     val atsName = UrlAllowlist.detectAtsName(currentAtsUrl)
-                    recordApplied(job, ApplicationType.External(atsName, currentAtsUrl))
+                    recordApplied(job, ApplicationType.External(atsName, currentAtsUrl), verified)
                     activityRepo.log(ActivityAction.APPLICATION_SUBMITTED, "${job.title} at ${job.company}", currentAtsUrl)
-                    log("Applied (External/$atsName) on attempt $attempt: ${job.title} @ ${job.company}")
+                    log("Applied (External/$atsName${if (!verified) " — unverified" else ""}) attempt $attempt: ${job.title} @ ${job.company}")
                     return true
                 }
                 log("Attempt $attempt submit result: $submitResult — retrying...")
@@ -528,7 +534,16 @@ class AutomationOrchestrator @Inject constructor(
         }
     }
 
-    private suspend fun recordApplied(job: ScrapedJob, type: ApplicationType) {
+    private suspend fun verifySubmission(engine: AutomationWebEngine): Boolean {
+        return runCatching {
+            val script = jsLoader.load(ScriptRegistry.VERIFY_SUBMISSION)
+            val result = engine.runJs("verify_submit", script, 6_000)
+            val data = parseJson(result)
+            data?.get("verified") as? Boolean ?: false
+        }.getOrElse { false }
+    }
+
+    private suspend fun recordApplied(job: ScrapedJob, type: ApplicationType, verified: Boolean = true) {
         jobRepo.save(
             JobApplication(
                 jobId = job.id,
@@ -537,8 +552,9 @@ class AutomationOrchestrator @Inject constructor(
                 jobUrl = job.url,
                 applicationType = type,
                 source = job.source,
-                status = ApplicationStatus.APPLIED,
-                appliedAt = System.currentTimeMillis()
+                status = if (verified) ApplicationStatus.APPLIED else ApplicationStatus.SUBMITTED_UNVERIFIED,
+                appliedAt = System.currentTimeMillis(),
+                errorMessage = if (!verified) "Submitted — success page not detected. Tap 'Open Apply Site' to verify manually." else null
             )
         )
     }
@@ -625,10 +641,37 @@ class AutomationOrchestrator @Inject constructor(
                     company = m["company"] as? String ?: "Unknown",
                     isEasyApply = m["isEasyApply"] as? Boolean ?: false,
                     url = m["url"] as? String ?: "",
-                    source = source
+                    source = source,
+                    location = m["location"] as? String ?: ""
                 )
             }?.filter { it.id.isNotBlank() && it.url.isNotBlank() } ?: emptyList()
         }.getOrElse { emptyList() }
+    }
+
+    /**
+     * Returns true if the job's listed location is compatible with the user's preferred location.
+     * - If the user has no location preference: always true
+     * - If the job location is unknown/blank: let it through (can't verify)
+     * - Remote/Anywhere jobs: allowed only if user allows remote or hybrid
+     * - Otherwise: job location must contain at least one significant word from the user's location
+     */
+    private fun locationMatches(job: ScrapedJob, prefs: UserPreferences): Boolean {
+        if (prefs.location.isBlank()) return true
+        val jobLoc = job.location.lowercase().trim()
+        if (jobLoc.isBlank()) return true // unknown location — can't filter, let through
+
+        // Remote/Anywhere jobs
+        if (jobLoc.contains("remote") || jobLoc.contains("anywhere") ||
+            jobLoc.contains("worldwide") || jobLoc.contains("global")) {
+            return prefs.remoteOnly || prefs.hybridOk
+        }
+
+        // Match: at least one meaningful word from user's location appears in job location
+        val userWords = prefs.location.lowercase()
+            .split(",", " ", "-")
+            .map { it.trim() }
+            .filter { it.length >= 3 }
+        return userWords.any { word -> jobLoc.contains(word) }
     }
 
     @Suppress("UNCHECKED_CAST")

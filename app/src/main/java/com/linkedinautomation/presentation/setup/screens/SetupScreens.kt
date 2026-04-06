@@ -29,7 +29,15 @@ import com.linkedinautomation.presentation.components.ToggleRow
 
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
 @Composable
-fun WelcomeScreen(onNext: () -> Unit) {
+fun WelcomeScreen(
+    onNext: () -> Unit,
+    onImportRequest: ((Uri) -> Unit)? = null,
+    importState: Boolean? = null  // null=idle, true=success, false=failed
+) {
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { onImportRequest?.invoke(it) } }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -49,6 +57,24 @@ fun WelcomeScreen(onNext: () -> Unit) {
         Spacer(Modifier.height(40.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
             Text("Get Started")
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { importLauncher.launch("application/json") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Restore from Backup")
+        }
+        if (importState == false) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Import failed — check the file is a valid Broken Tenton backup.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
