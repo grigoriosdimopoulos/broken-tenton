@@ -10,6 +10,7 @@
       var linkEl = card.querySelector('h2 a, .jobTitle a, a[href*="/jobs/"]');
       var applyEl = card.querySelector('[aria-label*="Easily apply"], .ia-IndeedApplyButton, [data-indeed-apply]');
 
+      var locationEl = card.querySelector('.companyLocation, [data-testid="text-location"], .resultContent .attribute_snippet');
       if (titleEl || linkEl) {
         var href = linkEl ? linkEl.href : '';
         if (!jobId && href) {
@@ -21,7 +22,8 @@
           title: titleEl ? titleEl.textContent.trim() : (linkEl ? linkEl.textContent.trim() : 'Unknown'),
           company: companyEl ? companyEl.textContent.trim() : 'Unknown',
           isEasyApply: false,
-          url: href || window.location.href
+          url: href || window.location.href,
+          location: locationEl ? locationEl.textContent.trim() : ''
         });
       }
     });

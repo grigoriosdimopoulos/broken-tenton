@@ -8,6 +8,9 @@ import com.linkedinautomation.automation.engine.UrlAllowlist
 import com.linkedinautomation.automation.scripts.JsScriptLoader
 import com.linkedinautomation.automation.scripts.ScriptRegistry
 import com.linkedinautomation.automation.sources.*
+import com.linkedinautomation.automation.sources.DiceSource
+import com.linkedinautomation.automation.sources.RemoteOKSource
+import com.linkedinautomation.automation.sources.WeWorkRemotelySource
 import com.linkedinautomation.domain.model.*
 import com.linkedinautomation.domain.repository.ActivityLogRepository
 import com.linkedinautomation.domain.repository.JobApplicationRepository
@@ -595,7 +598,10 @@ class AutomationOrchestrator @Inject constructor(
                 com.linkedinautomation.domain.model.JobBoardSource.GLASSDOOR -> GlassdoorSource()
                 com.linkedinautomation.domain.model.JobBoardSource.ZIPRECRUITER -> ZipRecruiterSource()
                 com.linkedinautomation.domain.model.JobBoardSource.MONSTER -> MonsterSource()
-                com.linkedinautomation.domain.model.JobBoardSource.SIMPLYHIRED -> ZipRecruiterSource() // fallback
+                com.linkedinautomation.domain.model.JobBoardSource.SIMPLYHIRED -> ZipRecruiterSource()
+                com.linkedinautomation.domain.model.JobBoardSource.DICE -> DiceSource()
+                com.linkedinautomation.domain.model.JobBoardSource.REMOTEOK -> RemoteOKSource()
+                com.linkedinautomation.domain.model.JobBoardSource.WEWORKREMOTELY -> WeWorkRemotelySource()
             }
         }
     }
@@ -669,7 +675,10 @@ class AutomationOrchestrator @Inject constructor(
     private fun locationMatches(job: ScrapedJob, prefs: UserPreferences): Boolean {
         if (prefs.location.isBlank()) return true
         val jobLoc = job.location.lowercase().trim()
-        if (jobLoc.isBlank()) return false // unknown location with user-specified location — skip for safety
+        // LinkedIn extracts location from job cards — reject blank.
+        // Direct-mode boards (Indeed, Monster, etc.) use URL-based location search,
+        // so a blank scraped location just means we didn't extract it, not that it's remote.
+        if (jobLoc.isBlank()) return job.source != "LinkedIn"
 
         // Remote/Anywhere jobs
         if (jobLoc.contains("remote") || jobLoc.contains("anywhere") ||

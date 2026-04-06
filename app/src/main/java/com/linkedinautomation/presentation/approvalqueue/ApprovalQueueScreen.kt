@@ -3,6 +3,7 @@ package com.linkedinautomation.presentation.approvalqueue
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.linkedinautomation.domain.model.JobApplication
@@ -21,8 +23,29 @@ fun ApprovalQueueScreen(viewModel: ApprovalQueueViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val pending by viewModel.pending.collectAsState(emptyList())
     val prefs by viewModel.prefs.collectAsState(null)
+    var showAddDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    if (showAddDialog) {
+        AddManualJobDialog(
+            onDismiss = { showAddDialog = false },
+            onAdd = { title, company, url ->
+                viewModel.addManual(title, company, url)
+                showAddDialog = false
+            }
+        )
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showAddDialog = true },
+                icon = { Icon(Icons.Default.Add, null) },
+                text = { Text("Add Job") },
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        }
+    ) { innerPadding ->
+    Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp)) {
         Text(
             "Approval Queue (${pending.size})",
             style = MaterialTheme.typography.headlineSmall,
@@ -63,6 +86,45 @@ fun ApprovalQueueScreen(viewModel: ApprovalQueueViewModel = hiltViewModel()) {
             }
         }
     }
+    } // end Scaffold
+}
+
+@Composable
+private fun AddManualJobDialog(onDismiss: () -> Unit, onAdd: (String, String, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var company by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Job Manually") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("The app will apply to this job when you tap Apply.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(value = title, onValueChange = { title = it },
+                    label = { Text("Job Title *") }, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("e.g. Android Engineer") })
+                OutlinedTextField(value = company, onValueChange = { company = it },
+                    label = { Text("Company") }, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("e.g. Acme Inc") })
+                OutlinedTextField(value = url, onValueChange = { url = it },
+                    label = { Text("Application URL *") }, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    placeholder = { Text("https://company.com/apply/...") })
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onAdd(title, company, url) },
+                enabled = title.isNotBlank() && url.startsWith("http")
+            ) { Text("Add to Queue") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
