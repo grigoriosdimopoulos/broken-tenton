@@ -87,6 +87,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setEasyApplyOnly(value: Boolean) {
+        viewModelScope.launch {
+            val current = prefsRepo.get()
+            savePrefsUseCase(current.copy(easyApplyOnly = value))
+        }
+    }
+
+    fun setAiAssistFallback(value: Boolean) {
+        viewModelScope.launch {
+            val current = prefsRepo.get()
+            savePrefsUseCase(current.copy(aiAssistFallback = value))
+        }
+    }
+
     fun copyResume(uri: Uri): Boolean {
         return runCatching {
             val dest = File(context.filesDir, "resume.pdf")

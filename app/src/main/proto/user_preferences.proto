@@ -42,4 +42,6 @@ message UserPreferencesProto {
     int32 min_salary = 34;
     string email = 35;
     string linked_in_cookies = 36;
+    bool easy_apply_only = 37;
+    bool ai_assist_fallback = 38;
 }

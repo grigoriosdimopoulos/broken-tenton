@@ -335,6 +335,43 @@ fun SettingsJobPrefsScreen(
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(value = exclCo, onValueChange = { exclCo = it }, label = { Text("Exclude companies") },
             modifier = Modifier.fillMaxWidth(), supportingText = { Text("Comma-separated") })
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(8.dp))
+        Text("Application Mode", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        ToggleRow(
+            label = "Easy Apply Only",
+            subtext = "Skip jobs that require external applications — only use LinkedIn Easy Apply",
+            checked = prefs?.easyApplyOnly ?: false,
+            onCheckedChange = { viewModel.setEasyApplyOnly(it) }
+        )
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(8.dp))
+        Text("AI Assist (Beta)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(4.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                ToggleRow(
+                    label = "AI Assist Fallback",
+                    subtext = "If Easy Apply fails after ${5} retries, Claude AI will analyse the form and try once more with AI-generated answers. Requires Claude API key.",
+                    checked = prefs?.aiAssistFallback ?: false,
+                    onCheckedChange = { viewModel.setAiAssistFallback(it) }
+                )
+                if (prefs?.aiAssistFallback == true && (prefs?.claudeApiKey?.isBlank() == true)) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Claude API key is not set — go to Claude Setup to add one.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
         Button(onClick = {
             viewModel.updateJobPrefs(

@@ -33,6 +33,7 @@ class AutomationOrchestrator @Inject constructor(
     private val activityRepo: ActivityLogRepository
 ) {
     private val TAG = "AutomationOrchestrator"
+    private val MAX_EASY_APPLY_ATTEMPTS = 5
     private val _state = MutableStateFlow<AutomationState>(AutomationState.Idle)
     val state: StateFlow<AutomationState> = _state
 
@@ -88,10 +89,11 @@ class AutomationOrchestrator @Inject constructor(
                 }
             }
 
-            // Filter excluded + location mismatch
+            // Filter excluded + location mismatch + easy-apply-only mode
             val filteredJobs = allJobs.filter { job ->
                 val titleLower = job.title.lowercase()
                 val companyLower = job.company.lowercase()
+                if (prefs.easyApplyOnly && !job.isEasyApply) return@filter false
                 prefs.excludeKeywords.none { titleLower.contains(it.lowercase()) } &&
                 prefs.excludeCompanies.none { companyLower.contains(it.lowercase()) } &&
                 locationMatches(job, prefs)
@@ -249,54 +251,181 @@ class AutomationOrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * Attempts LinkedIn Easy Apply up to [MAX_EASY_APPLY_ATTEMPTS] times.
+     *
+     * Each "attempt" is one full pass through the multi-page Easy Apply modal.
+     * If all attempts fail AND [UserPreferences.aiAssistFallback] is enabled the
+     * orchestrator calls Claude to analyse the last-seen form and generate answers,
+     * then makes one final try with those AI-generated answers.
+     *
+     * Key fix vs previous version: after clicking Submit we run a modal-presence
+     * check (linkedin_modal_check.js). If the modal is still open the application
+     * was NOT submitted (validation error); we do NOT record it as applied.
+     */
     private suspend fun performEasyApply(
         engine: AutomationWebEngine,
         job: ScrapedJob,
         prefs: UserPreferences
     ): Boolean {
         activityRepo.log(ActivityAction.EASY_APPLY_STARTED, "${job.title} at ${job.company}", job.url)
-        var attempts = 0
-        val maxPages = 10
-        while (attempts < maxPages) {
-            attempts++
-            val script = jsLoader.load(ScriptRegistry.LINKEDIN_EASY_APPLY)
-            val result = engine.runJs("easy_apply", script, 10_000)
 
-            val data = parseJson(result) ?: break
+        var lastFailReason = "Easy Apply did not complete"
+        var aiAnswers: Map<String, String> = emptyMap() // populated by AI assist on final attempt
+
+        for (attempt in 1..MAX_EASY_APPLY_ATTEMPTS) {
+            // On every retry, re-navigate to the job page so the modal resets
+            if (attempt > 1) {
+                log("Easy Apply attempt $attempt/${MAX_EASY_APPLY_ATTEMPTS} for ${job.title}")
+                engine.navigateTo(job.url, 15_000)
+                delay(2000)
+            }
+
+            val success = runEasyApplyPass(engine, job, prefs, aiAnswers)
+            if (success != null) {
+                // success == true  → confirmed submitted
+                // success == false → submitted button clicked but modal stayed open (validation error)
+                if (success) return true
+                lastFailReason = "Submit clicked but form validation failed (modal stayed open)"
+            }
+            // null = couldn't complete the form; try again
+        }
+
+        // All attempts exhausted — try AI assist if enabled
+        if (prefs.aiAssistFallback && prefs.claudeApiKey.isNotBlank()) {
+            log("All Easy Apply attempts failed — trying AI assist fallback for ${job.title}")
+            activityRepo.log(ActivityAction.SCREENING_QUESTION, "AI assist fallback triggered for ${job.title}")
+
+            aiAnswers = generateAiAnswersForForm(engine, job, prefs)
+            if (aiAnswers.isNotEmpty()) {
+                engine.navigateTo(job.url, 15_000)
+                delay(2000)
+                val aiSuccess = runEasyApplyPass(engine, job, prefs, aiAnswers)
+                if (aiSuccess == true) return true
+            }
+        }
+
+        recordFailed(job, lastFailReason)
+        return false
+    }
+
+    /**
+     * One complete pass through the Easy Apply modal pages.
+     * Returns:
+     *   true  → confirmed submitted (modal closed, success text visible)
+     *   false → submit was clicked but modal stayed open (validation error)
+     *   null  → could not complete the form (no submit/next button found or JS error)
+     */
+    private suspend fun runEasyApplyPass(
+        engine: AutomationWebEngine,
+        job: ScrapedJob,
+        prefs: UserPreferences,
+        aiAnswers: Map<String, String>
+    ): Boolean? {
+        val maxPages = 15 // maximum form pages within a single attempt
+        var pagesNavigated = 0
+
+        while (pagesNavigated < maxPages) {
+            pagesNavigated++
+            val result = runCatching {
+                engine.runJs("easy_apply", jsLoader.load(ScriptRegistry.LINKEDIN_EASY_APPLY), 10_000)
+            }.getOrNull() ?: return null
+
+            val data = parseJson(result) ?: return null
 
             when (data["action"] as? String) {
                 "external" -> {
-                    val url = data["url"] as? String ?: return false
-                    return performExternalApply(engine, job.copy(url = url, isEasyApply = false), prefs)
+                    val url = data["url"] as? String ?: return null
+                    return if (performExternalApply(engine, job.copy(url = url, isEasyApply = false), prefs)) true else null
                 }
-                "opened_modal" -> { delay(1000); continue }
+                "opened_modal" -> {
+                    delay(1200)
+                    continue
+                }
                 "form_page" -> {
-                    // Handle screening questions
-                    fillScreeningQuestions(engine, job, prefs)
+                    // Fill known fields first, then AI-generated answers if available
+                    fillScreeningQuestions(engine, job, prefs, aiAnswers)
                     delay(500)
 
-                    // Determine next action
                     val hasSubmit = data["hasSubmit"] as? Boolean ?: false
+                    val action = if (hasSubmit) "submit" else "next"
                     val actionScript = jsLoader.loadAndSubstitute(
                         ScriptRegistry.LINKEDIN_SUBMIT,
-                        mapOf("ACTION" to if (hasSubmit) "submit" else "next", "FILL_ID" to "", "FILL_VALUE" to "")
+                        mapOf("ACTION" to action, "FILL_ID" to "", "FILL_VALUE" to "")
                     )
-                    val actionResult = engine.runJs("submit", actionScript, 8_000)
-                    if (actionResult == "submitted" || actionResult.contains("submitted")) {
-                        delay(2000)
-                        val verified = verifySubmission(engine)
-                        recordApplied(job, ApplicationType.EasyApply, verified)
-                        activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED, "${job.title} at ${job.company}")
-                        log("Applied (Easy Apply${if (!verified) " — unverified" else ""}): ${job.title} @ ${job.company}")
-                        return true
+                    val actionResult = runCatching {
+                        engine.runJs("submit", actionScript, 8_000)
+                    }.getOrNull() ?: return null
+
+                    if (actionResult.contains("error", ignoreCase = true)) {
+                        return null // button not found
                     }
+
                     delay(1500)
+
+                    if (hasSubmit) {
+                        // Check if the modal actually closed (real submission)
+                        // vs stayed open (LinkedIn validation rejected the form)
+                        val modalCheckScript = jsLoader.load(ScriptRegistry.LINKEDIN_MODAL_CHECK)
+                        val modalCheck = runCatching {
+                            engine.runJs("modal_check", modalCheckScript, 6_000)
+                        }.getOrNull()
+                        val modalData = modalCheck?.let { parseJson(it) }
+                        val modalStillOpen = modalData?.get("modalOpen") as? Boolean ?: true
+
+                        return if (!modalStillOpen) {
+                            // Modal closed → genuine submit
+                            delay(1500)
+                            val verified = verifySubmission(engine)
+                            recordApplied(job, ApplicationType.EasyApply, verified)
+                            activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED, "${job.title} at ${job.company}")
+                            log("Applied (Easy Apply${if (!verified) " — unverified" else ""}): ${job.title}")
+                            true
+                        } else {
+                            // Modal still open = validation errors; return false so caller retries
+                            val errors = (modalData?.get("errors") as? List<*>)?.joinToString("; ") ?: ""
+                            log("Easy Apply submit rejected — modal still open${if (errors.isNotBlank()) ": $errors" else ""}")
+                            false
+                        }
+                    }
+                    // Clicked "Next" — continue to next page
                 }
-                else -> break
+                else -> return null // unknown action
             }
         }
-        recordFailed(job, "Easy Apply did not complete")
-        return false
+        return null // exceeded page limit
+    }
+
+    /** Uses Claude to generate answers for all visible Easy Apply form fields. */
+    private suspend fun generateAiAnswersForForm(
+        engine: AutomationWebEngine,
+        job: ScrapedJob,
+        prefs: UserPreferences
+    ): Map<String, String> {
+        return runCatching {
+            val qScript = jsLoader.load(ScriptRegistry.LINKEDIN_SCREENING)
+            val qResult = engine.runJs("screening_ai", qScript, 8_000)
+            val questions = parseJsonList(qResult) ?: return emptyMap()
+
+            val answers = mutableMapOf<String, String>()
+            for (q in questions) {
+                val questionText = q["question"] as? String ?: continue
+                val elementId = q["elementId"] as? String ?: continue
+                val currentValue = q["currentValue"] as? String ?: ""
+                if (currentValue.isNotBlank()) continue
+
+                val answer = claudeGenerator.generateAnswer(
+                    question = questionText,
+                    userBio = prefs.experienceBio,
+                    jobTitle = job.title,
+                    company = job.company,
+                    persona = prefs.claudePersona,
+                    apiKey = prefs.claudeApiKey
+                )
+                answers[elementId] = answer
+            }
+            answers
+        }.getOrElse { emptyMap() }
     }
 
     private suspend fun performExternalApply(
@@ -475,7 +604,8 @@ class AutomationOrchestrator @Inject constructor(
     private suspend fun fillScreeningQuestions(
         engine: AutomationWebEngine,
         job: ScrapedJob,
-        prefs: UserPreferences
+        prefs: UserPreferences,
+        aiAnswers: Map<String, String> = emptyMap()
     ) {
         val qScript = jsLoader.load(ScriptRegistry.LINKEDIN_SCREENING)
         val qResult = runCatching { engine.runJs("screening", qScript, 8_000) }.getOrNull() ?: return
@@ -488,19 +618,21 @@ class AutomationOrchestrator @Inject constructor(
             val currentValue = q["currentValue"] as? String ?: ""
             if (currentValue.isNotBlank()) continue // already filled
 
-            activityRepo.log(ActivityAction.SCREENING_QUESTION, "Q: $questionText (${job.title})")
-            log("Answering: $questionText")
-
-            val answer = runCatching {
-                claudeGenerator.generateAnswer(
-                    question = questionText,
-                    userBio = prefs.experienceBio,
-                    jobTitle = job.title,
-                    company = job.company,
-                    persona = prefs.claudePersona,
-                    apiKey = prefs.claudeApiKey
-                )
-            }.getOrElse { "I am very interested in this opportunity and believe my experience aligns well with your requirements." }
+            // Use AI-generated answer from fallback pass if available; otherwise ask Claude now
+            val answer = aiAnswers[elementId] ?: run {
+                activityRepo.log(ActivityAction.SCREENING_QUESTION, "Q: $questionText (${job.title})")
+                log("Answering: $questionText")
+                runCatching {
+                    claudeGenerator.generateAnswer(
+                        question = questionText,
+                        userBio = prefs.experienceBio,
+                        jobTitle = job.title,
+                        company = job.company,
+                        persona = prefs.claudePersona,
+                        apiKey = prefs.claudeApiKey
+                    )
+                }.getOrElse { "I am very interested in this opportunity and believe my experience aligns well with your requirements." }
+            }
 
             val fillScript = jsLoader.loadAndSubstitute(
                 ScriptRegistry.LINKEDIN_SUBMIT,

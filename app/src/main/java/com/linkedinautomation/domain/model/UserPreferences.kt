@@ -45,5 +45,9 @@ data class UserPreferences(
     // Email for application forms
     val email: String = "",
     // Stored LinkedIn session cookies (replaces plaintext email/password login)
-    val linkedInCookies: String = ""
+    val linkedInCookies: String = "",
+    // Only apply to Easy Apply jobs; skip external applications
+    val easyApplyOnly: Boolean = false,
+    // Feature flag: if Easy Apply fails after all retries, use Claude AI to help fill the form
+    val aiAssistFallback: Boolean = false
 )

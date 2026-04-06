@@ -90,7 +90,9 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         yearsOfExperience = yearsOfExperience,
         minSalary = minSalary,
         email = email,
-        linkedInCookies = linkedInCookies
+        linkedInCookies = linkedInCookies,
+        easyApplyOnly = easyApplyOnly,
+        aiAssistFallback = aiAssistFallback
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -131,5 +133,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setMinSalary(minSalary)
             .setEmail(email)
             .setLinkedInCookies(linkedInCookies)
+            .setEasyApplyOnly(easyApplyOnly)
+            .setAiAssistFallback(aiAssistFallback)
             .build()
 }
