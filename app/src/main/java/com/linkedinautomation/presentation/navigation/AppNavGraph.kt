@@ -219,7 +219,8 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                     onNavigateToAccount = { navController.navigate(Screen.SettingsCredentials.route) },
                     onNavigateToJobPrefs = { navController.navigate(Screen.SettingsJobPrefs.route) },
                     onNavigateToResume = { navController.navigate(Screen.SettingsResume.route) },
-                    onNavigateToPersonalInfo = { navController.navigate(Screen.SettingsPersonalInfo.route) }
+                    onNavigateToPersonalInfo = { navController.navigate(Screen.SettingsPersonalInfo.route) },
+                    onNavigateToBackup = { navController.navigate(Screen.SettingsBackup.route) }
                 )
             }
 
@@ -238,6 +239,9 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
             }
             composable(Screen.SettingsResume.route) {
                 SettingsResumeScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.SettingsBackup.route) {
+                SettingsBackupScreen(onBack = { navController.popBackStack() })
             }
 
             // ── Application Detail ──────────────────────────────────────

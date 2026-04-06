@@ -23,7 +23,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.linkedinautomation.domain.model.*
 import com.linkedinautomation.presentation.components.ToggleRow
 import com.linkedinautomation.presentation.settings.SettingsViewModel
-import com.linkedinautomation.presentation.setup.SetupViewModel
 
 @Composable
 fun SettingsScreen(
@@ -31,7 +30,8 @@ fun SettingsScreen(
     onNavigateToAccount: () -> Unit,
     onNavigateToJobPrefs: () -> Unit,
     onNavigateToResume: () -> Unit,
-    onNavigateToPersonalInfo: () -> Unit = {}
+    onNavigateToPersonalInfo: () -> Unit = {},
+    onNavigateToBackup: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -51,6 +51,9 @@ fun SettingsScreen(
         }
         SettingsSection("Claude AI") {
             SettingsItem("Writing Style & Persona", "Tone, style, custom instructions", Icons.Default.Psychology, onNavigateToPersona)
+        }
+        SettingsSection("Backup & Restore") {
+            SettingsItem("Export / Import Settings", "Save or restore all settings + resume", Icons.Default.CloudSync, onNavigateToBackup)
         }
     }
 }
@@ -313,5 +316,193 @@ fun SettingsResumeScreen(
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+    }
+}
+
+// ─── Settings: Backup & Restore ───────────────────────────────────────────────
+@Composable
+fun SettingsBackupScreen(
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val exportUri by viewModel.exportUri.collectAsState()
+    val importResult by viewModel.importResult.collectAsState()
+    val busy by viewModel.backupBusy.collectAsState()
+    var showImportConfirm by remember { mutableStateOf(false) }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Launch share sheet when export URI is ready
+    val shareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { viewModel.clearBackupState() }
+
+    LaunchedEffect(exportUri) {
+        val uri = exportUri ?: return@LaunchedEffect
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "Broken Tenton Settings Backup")
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        shareLauncher.launch(android.content.Intent.createChooser(intent, "Save backup via…"))
+    }
+
+    // File picker for import
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { pendingImportUri = it; showImportConfirm = true }
+    }
+
+    // Import confirmation dialog
+    if (showImportConfirm) {
+        AlertDialog(
+            onDismissRequest = { showImportConfirm = false; pendingImportUri = null },
+            title = { Text("Overwrite all settings?") },
+            text = { Text("This will replace ALL current settings, credentials, personal info, and resume with the backup file. This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingImportUri?.let { viewModel.importSettings(it) }
+                        showImportConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Import & Overwrite") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportConfirm = false; pendingImportUri = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null) }
+            Text("Backup & Restore", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(8.dp))
+
+        // Result banners
+        if (importResult == true) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Settings imported successfully!", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+        }
+        if (importResult == false) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Import failed. Make sure you selected a valid Broken Tenton backup file.",
+                        color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
+        }
+
+        // Export card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FileUpload, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Export Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Creates a .json backup containing all your settings, personal info, Claude key, and resume PDF. Share it to Google Drive, email, or any storage app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.exportSettings() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text("Export & Share Backup")
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Import card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FileDownload, null, tint = MaterialTheme.colorScheme.secondary)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Import Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Restores all settings from a previously exported backup file. Your resume PDF will also be restored.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { viewModel.clearBackupState(); importLauncher.launch("application/json") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy
+                ) {
+                    Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Pick Backup File to Import")
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Info
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("What's included in the backup:", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(8.dp))
+                listOf(
+                    "Personal info (name, phone, location)",
+                    "LinkedIn credentials",
+                    "Job search preferences & exclusions",
+                    "Experience bio & Claude API key",
+                    "Claude persona / writing style",
+                    "Resume PDF (embedded in file)"
+                ).forEach { item ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                        Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(item, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
     }
 }
