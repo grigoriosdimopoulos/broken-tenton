@@ -100,11 +100,13 @@ class AutomationOrchestrator @Inject constructor(
             var appliedCount = 0
             var queuedCount = 0
 
+            val screenshotsDir = java.io.File(context.filesDir, "screenshots")
+
             for (job in filteredJobs) {
                 if (_state.value is AutomationState.Paused) break
                 try {
                     if (prefs.requireApproval) {
-                        // Stage for approval
+                        // Stage for approval — save with location so the queue shows where the job is
                         jobRepo.save(
                             JobApplication(
                                 jobId = job.id,
@@ -115,15 +117,24 @@ class AutomationOrchestrator @Inject constructor(
                                 else ApplicationType.External(UrlAllowlist.detectAtsName(job.url), job.url),
                                 source = job.source,
                                 status = ApplicationStatus.PENDING_APPROVAL,
-                                appliedAt = System.currentTimeMillis()
+                                appliedAt = System.currentTimeMillis(),
+                                location = job.location.ifBlank { null }
                             )
                         )
                         queuedCount++
                     } else {
                         val success = applyToJob(engine, job, prefs)
+                        // Capture screenshot right after apply (success or fail page)
+                        val ssPath = engine?.takeScreenshot("job_${job.id.take(12)}", screenshotsDir)
                         if (success) {
                             appliedCount++
                             onNotifyApplied?.invoke(job.title, job.company)
+                        }
+                        // Update screenshotPath on whatever record was just saved
+                        if (ssPath != null) {
+                            jobRepo.getByJobId(job.id)?.let { saved ->
+                                jobRepo.save(saved.copy(screenshotPath = ssPath))
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -658,7 +669,7 @@ class AutomationOrchestrator @Inject constructor(
     private fun locationMatches(job: ScrapedJob, prefs: UserPreferences): Boolean {
         if (prefs.location.isBlank()) return true
         val jobLoc = job.location.lowercase().trim()
-        if (jobLoc.isBlank()) return true // unknown location — can't filter, let through
+        if (jobLoc.isBlank()) return false // unknown location with user-specified location — skip for safety
 
         // Remote/Anywhere jobs
         if (jobLoc.contains("remote") || jobLoc.contains("anywhere") ||

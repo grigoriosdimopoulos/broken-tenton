@@ -67,7 +67,8 @@ class SetupViewModel @Inject constructor(
     fun setPersonalInfo(
         firstName: String, lastName: String, phone: String,
         city: String, country: String, linkedInUrl: String,
-        currentJobTitle: String, yearsOfExperience: Int
+        currentJobTitle: String, yearsOfExperience: Int,
+        email: String = ""
     ) {
         _prefs.value = _prefs.value.copy(
             firstName = firstName,
@@ -77,7 +78,8 @@ class SetupViewModel @Inject constructor(
             country = country,
             linkedInUrl = linkedInUrl,
             currentJobTitle = currentJobTitle,
-            yearsOfExperience = yearsOfExperience
+            yearsOfExperience = yearsOfExperience,
+            email = email
         )
     }
 

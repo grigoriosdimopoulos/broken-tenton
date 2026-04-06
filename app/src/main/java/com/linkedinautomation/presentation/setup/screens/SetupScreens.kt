@@ -182,11 +182,13 @@ fun PersonalInfoScreen(
     firstName: String, lastName: String, phone: String,
     city: String, country: String, linkedInUrl: String,
     currentJobTitle: String, yearsOfExperience: Int,
-    onSave: (String, String, String, String, String, String, String, Int) -> Unit,
+    email: String = "",
+    onSave: (String, String, String, String, String, String, String, Int, String) -> Unit,
     onNext: () -> Unit
 ) {
     var fn by remember { mutableStateOf(firstName) }
     var ln by remember { mutableStateOf(lastName) }
+    var em by remember { mutableStateOf(email) }
     var ph by remember { mutableStateOf(phone) }
     var ct by remember { mutableStateOf(city) }
     var co by remember { mutableStateOf(country) }
@@ -194,45 +196,52 @@ fun PersonalInfoScreen(
     var jt by remember { mutableStateOf(currentJobTitle) }
     var yoe by remember { mutableStateOf(if (yearsOfExperience > 0) yearsOfExperience.toString() else "") }
 
+    fun save() = onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0, em)
+
     Column(modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
         Text("Personal Information", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Used to auto-fill application forms (name, phone, LinkedIn URL, etc.).",
+        Text("Used to auto-fill application forms (name, email, phone, LinkedIn URL, etc.).",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(value = fn, onValueChange = { fn = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+            OutlinedTextField(value = fn, onValueChange = { fn = it; save() },
                 label = { Text("First Name") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = ln, onValueChange = { ln = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+            OutlinedTextField(value = ln, onValueChange = { ln = it; save() },
                 label = { Text("Last Name") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = ph, onValueChange = { ph = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+        OutlinedTextField(value = em, onValueChange = { em = it; save() },
+            label = { Text("Email Address") }, modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            placeholder = { Text("your@email.com") })
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(value = ph, onValueChange = { ph = it; save() },
             label = { Text("Phone Number") }, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             placeholder = { Text("+1 555 000 0000") })
         Spacer(Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(value = ct, onValueChange = { ct = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+            OutlinedTextField(value = ct, onValueChange = { ct = it; save() },
                 label = { Text("City") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = co, onValueChange = { co = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+            OutlinedTextField(value = co, onValueChange = { co = it; save() },
                 label = { Text("Country") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = li, onValueChange = { li = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+        OutlinedTextField(value = li, onValueChange = { li = it; save() },
             label = { Text("LinkedIn Profile URL") }, modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("https://linkedin.com/in/yourname") })
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = jt, onValueChange = { jt = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+        OutlinedTextField(value = jt, onValueChange = { jt = it; save() },
             label = { Text("Current / Most Recent Job Title") }, modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("e.g. Senior Software Engineer") })
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = yoe, onValueChange = { yoe = it; onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0) },
+        OutlinedTextField(value = yoe, onValueChange = { yoe = it; save() },
             label = { Text("Years of Experience") }, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Spacer(Modifier.height(32.dp))
         Button(
-            onClick = { onSave(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0); onNext() },
+            onClick = { save(); onNext() },
             enabled = fn.isNotBlank() && ln.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
         ) { Text("Continue") }

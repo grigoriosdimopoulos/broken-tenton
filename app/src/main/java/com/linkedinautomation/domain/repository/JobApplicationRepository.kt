@@ -11,6 +11,7 @@ interface JobApplicationRepository {
     fun observePendingCount(): Flow<Int>
     fun observeAppliedSince(since: Long): Flow<Int>
     suspend fun getById(id: Long): JobApplication?
+    suspend fun getByJobId(jobId: String): JobApplication?
     suspend fun existsByJobId(jobId: String): Boolean
     suspend fun save(job: JobApplication): Long
     suspend fun updateStatus(id: Long, status: ApplicationStatus)

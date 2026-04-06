@@ -24,6 +24,7 @@ class ApprovalQueueViewModel @Inject constructor(
 ) : ViewModel() {
 
     val pending: Flow<List<JobApplication>> = repo.observePending()
+    val prefs = prefsRepo.observe()
 
     fun approve(job: JobApplication, filesDir: java.io.File) {
         viewModelScope.launch {

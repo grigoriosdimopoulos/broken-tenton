@@ -2,10 +2,16 @@ package com.linkedinautomation.automation.engine
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.webkit.*
 import com.linkedinautomation.domain.model.SourceMode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -131,6 +137,37 @@ class AutomationWebEngine(
             }
         }
     }
+
+    /**
+     * Captures the current WebView content as a PNG screenshot.
+     * Returns the absolute file path on success, null on failure.
+     */
+    suspend fun takeScreenshot(tag: String, screenshotsDir: File): String? =
+        withContext(Dispatchers.Main) {
+            runCatching {
+                val wv = webView ?: return@runCatching null
+                screenshotsDir.mkdirs()
+                val targetW = 1080
+                val targetH = 1920
+                // Measure and layout if WebView has no dimensions (headless)
+                if (wv.width == 0 || wv.height == 0) {
+                    wv.measure(
+                        android.view.View.MeasureSpec.makeMeasureSpec(targetW, android.view.View.MeasureSpec.EXACTLY),
+                        android.view.View.MeasureSpec.makeMeasureSpec(targetH, android.view.View.MeasureSpec.EXACTLY)
+                    )
+                    wv.layout(0, 0, targetW, targetH)
+                }
+                val w = wv.width.coerceAtLeast(targetW)
+                val h = wv.height.coerceAtLeast(targetH)
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                wv.draw(canvas)
+                val file = File(screenshotsDir, "${tag}_${System.currentTimeMillis()}.png")
+                FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
+                bitmap.recycle()
+                file.absolutePath
+            }.getOrNull()
+        }
 
     fun destroy() {
         webView?.destroy()

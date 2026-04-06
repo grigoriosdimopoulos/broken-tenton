@@ -144,6 +144,7 @@ fun SettingsPersonalInfoScreen(
     val prefs by viewModel.prefs.collectAsState(null)
     var fn by remember(prefs) { mutableStateOf(prefs?.firstName ?: "") }
     var ln by remember(prefs) { mutableStateOf(prefs?.lastName ?: "") }
+    var em by remember(prefs) { mutableStateOf(prefs?.email ?: "") }
     var ph by remember(prefs) { mutableStateOf(prefs?.phone ?: "") }
     var ct by remember(prefs) { mutableStateOf(prefs?.city ?: "") }
     var co by remember(prefs) { mutableStateOf(prefs?.country ?: "") }
@@ -164,6 +165,10 @@ fun SettingsPersonalInfoScreen(
             OutlinedTextField(value = ln, onValueChange = { ln = it }, label = { Text("Last Name") }, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
+        OutlinedTextField(value = em, onValueChange = { em = it }, label = { Text("Email Address") },
+            modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            placeholder = { Text("your@email.com") })
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(value = ph, onValueChange = { ph = it }, label = { Text("Phone") },
             modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
         Spacer(Modifier.height(12.dp))
@@ -181,7 +186,7 @@ fun SettingsPersonalInfoScreen(
             modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Spacer(Modifier.height(24.dp))
         Button(onClick = {
-            viewModel.updatePersonalInfo(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0)
+            viewModel.updatePersonalInfo(fn, ln, ph, ct, co, li, jt, yoe.toIntOrNull() ?: 0, em)
             onBack()
         }, enabled = fn.isNotBlank() && ln.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text("Save")

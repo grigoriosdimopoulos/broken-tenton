@@ -49,14 +49,16 @@ class SettingsViewModel @Inject constructor(
     fun updatePersonalInfo(
         firstName: String, lastName: String, phone: String,
         city: String, country: String, linkedInUrl: String,
-        currentJobTitle: String, yearsOfExperience: Int
+        currentJobTitle: String, yearsOfExperience: Int,
+        email: String = ""
     ) {
         viewModelScope.launch {
             val current = prefsRepo.get()
             savePrefsUseCase(current.copy(
                 firstName = firstName, lastName = lastName, phone = phone,
                 city = city, country = country, linkedInUrl = linkedInUrl,
-                currentJobTitle = currentJobTitle, yearsOfExperience = yearsOfExperience
+                currentJobTitle = currentJobTitle, yearsOfExperience = yearsOfExperience,
+                email = email
             ))
         }
     }

@@ -15,7 +15,7 @@ import com.linkedinautomation.data.local.db.entity.JobApplicationEntity
         ActivityLogEntity::class,
         ClaudeUsageLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

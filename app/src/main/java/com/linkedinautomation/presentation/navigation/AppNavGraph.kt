@@ -143,8 +143,9 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                     linkedInUrl = prefs.linkedInUrl,
                     currentJobTitle = prefs.currentJobTitle,
                     yearsOfExperience = prefs.yearsOfExperience,
-                    onSave = { fn, ln, ph, ct, co, li, jt, yoe ->
-                        setupVm.setPersonalInfo(fn, ln, ph, ct, co, li, jt, yoe)
+                    email = prefs.email,
+                    onSave = { fn, ln, ph, ct, co, li, jt, yoe, em ->
+                        setupVm.setPersonalInfo(fn, ln, ph, ct, co, li, jt, yoe, em)
                     },
                     onNext = { navController.navigate(Screen.JobPreferences.route) }
                 )

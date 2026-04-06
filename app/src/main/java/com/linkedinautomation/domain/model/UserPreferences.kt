@@ -41,5 +41,7 @@ data class UserPreferences(
     val currentJobTitle: String = "",
     val yearsOfExperience: Int = 0,
     // Salary filter (minimum, in thousands USD; 0 = no minimum)
-    val minSalary: Int = 0
+    val minSalary: Int = 0,
+    // Email for application forms
+    val email: String = ""
 )

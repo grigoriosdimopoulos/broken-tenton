@@ -18,7 +18,9 @@ data class JobApplicationEntity(
     val source: String,
     val status: String,
     val appliedAt: Long,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val screenshotPath: String? = null,
+    val location: String? = null
 ) {
     fun toDomain() = JobApplication(
         id = id,
@@ -30,7 +32,9 @@ data class JobApplicationEntity(
         source = source,
         status = ApplicationStatus.valueOf(status),
         appliedAt = appliedAt,
-        errorMessage = errorMessage
+        errorMessage = errorMessage,
+        screenshotPath = screenshotPath,
+        location = location
     )
 
     companion object {
@@ -44,7 +48,9 @@ data class JobApplicationEntity(
             source = job.source,
             status = job.status.name,
             appliedAt = job.appliedAt,
-            errorMessage = job.errorMessage
+            errorMessage = job.errorMessage,
+            screenshotPath = job.screenshotPath,
+            location = job.location
         )
     }
 }

@@ -89,11 +89,11 @@ fun MonitorScreen(viewModel: MonitorViewModel = hiltViewModel()) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     SectionHeader("APPROVAL MODE")
                     ToggleRow(
-                        label = "Require approval before applying",
+                        label = if (prefs?.requireApproval == true) "Manual Review ON" else "Auto-Apply ON",
                         subtext = if (prefs?.requireApproval == true)
-                            "Jobs will be queued — you review and approve each one"
+                            "Jobs are queued in the Approval tab — you review each one before it's submitted"
                         else
-                            "Auto-approve: all matching jobs applied immediately",
+                            "Jobs matching your criteria are applied to automatically without asking you",
                         checked = prefs?.requireApproval ?: false,
                         onCheckedChange = { viewModel.setRequireApproval(it) }
                     )

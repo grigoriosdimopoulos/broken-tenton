@@ -16,6 +16,9 @@ interface JobApplicationDao {
     @Query("SELECT * FROM job_applications WHERE id = :id")
     suspend fun getById(id: Long): JobApplicationEntity?
 
+    @Query("SELECT * FROM job_applications WHERE jobId = :jobId LIMIT 1")
+    suspend fun getByJobId(jobId: String): JobApplicationEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM job_applications WHERE jobId = :jobId)")
     suspend fun existsByJobId(jobId: String): Boolean
 

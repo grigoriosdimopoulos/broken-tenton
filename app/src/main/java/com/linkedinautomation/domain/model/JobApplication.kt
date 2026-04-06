@@ -10,5 +10,7 @@ data class JobApplication(
     val source: String,
     val status: ApplicationStatus,
     val appliedAt: Long,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val screenshotPath: String? = null,
+    val location: String? = null
 )

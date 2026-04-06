@@ -43,6 +43,7 @@ class SettingsBackupManager @Inject constructor(
             put("linkedInUrl", prefs.linkedInUrl)
             put("currentJobTitle", prefs.currentJobTitle)
             put("yearsOfExperience", prefs.yearsOfExperience)
+            put("email", prefs.email)
 
             // ── Credentials ────────────────────────────────────────────
             put("linkedInEmail", prefs.linkedInEmail)
@@ -117,6 +118,7 @@ class SettingsBackupManager @Inject constructor(
             linkedInUrl = obj.optString("linkedInUrl"),
             currentJobTitle = obj.optString("currentJobTitle"),
             yearsOfExperience = obj.optInt("yearsOfExperience", 0),
+            email = obj.optString("email"),
 
             // Credentials
             linkedInEmail = obj.optString("linkedInEmail"),

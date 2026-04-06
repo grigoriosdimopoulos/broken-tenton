@@ -1,18 +1,23 @@
 package com.linkedinautomation.presentation.applicationdetail
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -20,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.linkedinautomation.domain.model.ApplicationStatus
 import com.linkedinautomation.domain.model.ApplicationType
 import com.linkedinautomation.presentation.components.StatusBadge
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -186,6 +192,41 @@ fun ApplicationDetailScreen(
                             Text("Open Apply Site")
                         }
                     }
+                }
+            }
+        }
+
+        // Location chip
+        if (!application.location.isNullOrBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Place, null, tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(application.location, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        // Screenshot
+        val screenshotPath = application.screenshotPath
+        if (!screenshotPath.isNullOrBlank() && File(screenshotPath).exists()) {
+            Spacer(Modifier.height(12.dp))
+            val bitmap = remember(screenshotPath) {
+                runCatching { BitmapFactory.decodeFile(screenshotPath)?.asImageBitmap() }.getOrNull()
+            }
+            if (bitmap != null) {
+                Text("Application Screenshot", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(6.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = "Screenshot of application page",
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.FillWidth
+                    )
                 }
             }
         }

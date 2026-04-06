@@ -30,6 +30,9 @@ class JobApplicationRepositoryImpl @Inject constructor(
     override suspend fun getById(id: Long): JobApplication? =
         dao.getById(id)?.toDomain()
 
+    override suspend fun getByJobId(jobId: String): JobApplication? =
+        dao.getByJobId(jobId)?.toDomain()
+
     override suspend fun existsByJobId(jobId: String): Boolean =
         dao.existsByJobId(jobId)
 
