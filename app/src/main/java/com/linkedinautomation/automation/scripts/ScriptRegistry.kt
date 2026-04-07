@@ -19,4 +19,5 @@ object ScriptRegistry {
     const val LINKEDIN_CLICK_APPLY = "js/linkedin_click_apply.js"
     const val VERIFY_SUBMISSION = "js/verify_submission.js"
     const val LINKEDIN_MODAL_CHECK = "js/linkedin_modal_check.js"
+    const val EXTRACT_PAGE_CONTEXT = "js/extract_page_context.js"
 }

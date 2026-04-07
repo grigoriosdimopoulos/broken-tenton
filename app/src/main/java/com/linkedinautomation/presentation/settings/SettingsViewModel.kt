@@ -102,6 +102,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setSmartApplyMode(value: Boolean) {
+        viewModelScope.launch {
+            val current = prefsRepo.get()
+            savePrefsUseCase(current.copy(smartApplyMode = value))
+        }
+    }
+
     fun copyResume(uri: Uri): Boolean {
         return runCatching {
             val dest = File(context.filesDir, "resume.pdf")

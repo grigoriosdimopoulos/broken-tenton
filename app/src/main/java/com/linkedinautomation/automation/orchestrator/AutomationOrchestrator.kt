@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.webkit.CookieManager
 import com.linkedinautomation.automation.ai.ClaudeAnswerGenerator
+import com.linkedinautomation.automation.ai.ClaudePageNavigator
 import com.linkedinautomation.automation.engine.AutomationWebEngine
 import com.linkedinautomation.automation.engine.UrlAllowlist
 import com.linkedinautomation.automation.scripts.JsScriptLoader
@@ -29,6 +30,7 @@ class AutomationOrchestrator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val jsLoader: JsScriptLoader,
     private val claudeGenerator: ClaudeAnswerGenerator,
+    private val claudeNavigator: ClaudePageNavigator,
     private val jobRepo: JobApplicationRepository,
     private val activityRepo: ActivityLogRepository
 ) {
@@ -280,10 +282,156 @@ class AutomationOrchestrator @Inject constructor(
         engine.navigateTo(job.url, 15_000)
         delay(2000)
 
-        return if (job.isEasyApply) {
+        // Smart Apply: Claude analyzes each page and generates the right JS action
+        return if (prefs.smartApplyMode && prefs.claudeApiKey.isNotBlank()) {
+            performSmartApply(engine, job, prefs)
+        } else if (job.isEasyApply) {
             performEasyApply(engine, job, prefs)
         } else {
             performExternalApply(engine, job, prefs)
+        }
+    }
+
+    /**
+     * Claude-driven application loop.
+     *
+     * Each iteration:
+     *  1. Extract the page structure (buttons, inputs, text) via JS
+     *  2. Send to Claude — ask "what JavaScript should I run to advance?"
+     *  3. Execute the returned JS and wait for the page to settle
+     *  4. Repeat until Claude says DONE:APPLIED / DONE:FAILED or max steps
+     *
+     * No hardcoded selectors — Claude handles DOM changes, modal dialogs, multi-step
+     * forms, external ATS pages, and confirmation screens autonomously.
+     */
+    private suspend fun performSmartApply(
+        engine: AutomationWebEngine,
+        job: ScrapedJob,
+        prefs: UserPreferences
+    ): Boolean {
+        activityRepo.log(ActivityAction.EASY_APPLY_STARTED,
+            "Smart Apply (Claude): ${job.title} @ ${job.company}", job.url)
+        log("SmartApply: starting for ${job.title}")
+
+        engine.enableApplyMode()
+        val maxSteps = 30
+        var lastPageUrl = ""
+        var samePageCount = 0
+
+        try {
+            for (step in 1..maxSteps) {
+                delay(1800) // let page / animation settle
+
+                // 1. Extract page context
+                val contextJson = runCatching {
+                    val script = jsLoader.load(ScriptRegistry.EXTRACT_PAGE_CONTEXT)
+                    engine.runJs("ctx_$step", script, 10_000)
+                }.getOrElse { e ->
+                    log("SmartApply step $step: context extraction failed — ${e.message}")
+                    "{}"
+                }
+
+                val currentUrl = engine.currentUrl ?: job.url
+
+                // Detect page-stuck loop (same URL, same content repeatedly)
+                if (currentUrl == lastPageUrl) {
+                    samePageCount++
+                    if (samePageCount >= 4) {
+                        val reason = "stuck on same page for $samePageCount steps ($currentUrl)"
+                        log("SmartApply: $reason")
+                        activityRepo.log(ActivityAction.EASY_APPLY_FAILED,
+                            "Smart Apply stuck: $reason", currentUrl)
+                        recordFailed(job, "Smart Apply: $reason")
+                        return false
+                    }
+                } else {
+                    samePageCount = 0
+                    lastPageUrl = currentUrl
+                }
+
+                // 2. Ask Claude what to do next
+                log("SmartApply step $step: asking Claude...")
+                val action = runCatching {
+                    claudeNavigator.getNextAction(
+                        pageContextJson = contextJson,
+                        jobTitle = job.title,
+                        company = job.company,
+                        step = step,
+                        prefs = prefs,
+                        apiKey = prefs.claudeApiKey
+                    )
+                }.getOrElse { e ->
+                    "DONE:FAILED:Claude API error — ${e.message}"
+                }
+
+                log("SmartApply step $step action: ${action.take(120)}")
+                activityRepo.log(
+                    ActivityAction.EASY_APPLY_STEP,
+                    "SmartApply step $step\nAction: ${action.take(300)}\nURL: $currentUrl",
+                    currentUrl
+                )
+
+                // 3. Handle the action
+                when {
+                    action.startsWith("DONE:APPLIED") -> {
+                        log("SmartApply: application confirmed submitted!")
+                        delay(1500)
+                        val verified = verifySubmission(engine)
+                        recordApplied(job, ApplicationType.EasyApply, verified)
+                        activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED,
+                            "SmartApply success: ${job.title} @ ${job.company}", currentUrl)
+                        return true
+                    }
+                    action.startsWith("DONE:FAILED") -> {
+                        val reason = action.removePrefix("DONE:FAILED:").trim()
+                        log("SmartApply: gave up — $reason")
+                        activityRepo.log(ActivityAction.EASY_APPLY_FAILED,
+                            "SmartApply failed: $reason\nJob: ${job.title} @ ${job.company}", currentUrl)
+                        recordFailed(job, "Smart Apply: $reason")
+                        return false
+                    }
+                    action.startsWith("NAVIGATE:") -> {
+                        val url = action.removePrefix("NAVIGATE:").trim()
+                        log("SmartApply: navigating to $url")
+                        runCatching { engine.navigateTo(url, 15_000) }
+                    }
+                    action.isBlank() -> {
+                        log("SmartApply step $step: Claude returned empty action, skipping")
+                    }
+                    else -> {
+                        // Execute Claude's JavaScript wrapped with a bridge callback
+                        val wrappedJs = """
+(function(){
+  try {
+    ${action}
+  } catch(e) {
+    // ignore minor JS errors — page may still have updated
+  }
+  setTimeout(function(){
+    try { AndroidBridge.onResult('nav_$step','done'); } catch(e2){}
+  }, 900);
+})();
+                        """.trimIndent()
+
+                        runCatching {
+                            engine.runJs("nav_$step", wrappedJs, 12_000)
+                        }.onFailure { e ->
+                            // Timeout usually means a page navigation happened — that's fine
+                            log("SmartApply step $step: JS timeout (likely navigated) — ${e.message}")
+                            delay(2000) // let new page load
+                        }
+                    }
+                }
+            }
+
+            // Exceeded max steps without concluding
+            val reason = "exceeded $maxSteps steps without completion"
+            log("SmartApply: $reason")
+            recordFailed(job, "Smart Apply: $reason")
+            return false
+
+        } finally {
+            engine.disableApplyMode()
         }
     }
 

@@ -46,4 +46,5 @@ message UserPreferencesProto {
     bool ai_assist_fallback = 38;
     int32 scan_lookback_days = 39;
     int32 easy_apply_max_attempts = 40;
+    bool smart_apply_mode = 41;
 }

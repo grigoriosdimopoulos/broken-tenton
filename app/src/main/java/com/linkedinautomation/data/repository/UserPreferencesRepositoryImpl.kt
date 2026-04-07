@@ -98,7 +98,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             scanLookbackDays > 0 -> scanLookbackDays
             else -> 1                   // 0 = proto default (never set) → 1 day
         },
-        easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5
+        easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5,
+        smartApplyMode = smartApplyMode
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -143,5 +144,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setAiAssistFallback(aiAssistFallback)
             .setScanLookbackDays(scanLookbackDays)
             .setEasyApplyMaxAttempts(easyApplyMaxAttempts)
+            .setSmartApplyMode(smartApplyMode)
             .build()
 }

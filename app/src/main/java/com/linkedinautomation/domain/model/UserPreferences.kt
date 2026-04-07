@@ -53,5 +53,7 @@ data class UserPreferences(
     // How many days back to search for new jobs (1 = last 24h, 7 = last week, 0 = all time)
     val scanLookbackDays: Int = 1,
     // Max Easy Apply attempts before giving up (or before AI assist kicks in)
-    val easyApplyMaxAttempts: Int = 5
+    val easyApplyMaxAttempts: Int = 5,
+    // When true, Claude drives ALL navigation instead of hardcoded JS selectors
+    val smartApplyMode: Boolean = false
 )

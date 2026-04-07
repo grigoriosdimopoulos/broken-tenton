@@ -406,13 +406,32 @@ fun SettingsJobPrefsScreen(
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(8.dp))
-        Text("AI Assist (Beta)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text("Claude AI", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(4.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(Modifier.padding(12.dp)) {
+                val hasKey = (prefs?.claudeApiKey?.isNotBlank()) == true
+                ToggleRow(
+                    label = "Smart Apply (Claude AI)",
+                    subtext = if (hasKey)
+                        "Claude analyzes every page step-by-step and generates the correct clicks/form fills — no hardcoded selectors. Highly recommended."
+                    else
+                        "Requires Claude API key (set in Settings → Claude AI). Replaces fragile DOM selectors with real AI navigation.",
+                    checked = prefs?.smartApplyMode ?: false,
+                    onCheckedChange = { viewModel.setSmartApplyMode(it) }
+                )
+                if (!hasKey && (prefs?.smartApplyMode == true)) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Claude API key required — go to Settings → Claude AI.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 val attemptsOptions = (1..10).map { it to "$it attempt${if (it == 1) "" else "s"}" }
                 val attemptsLabel = attemptsOptions.firstOrNull { it.first == easyApplyMaxAttempts }?.second ?: "5 attempts"
                 ExposedDropdownMenuBox(expanded = attemptsExpanded, onExpandedChange = { attemptsExpanded = it }) {
