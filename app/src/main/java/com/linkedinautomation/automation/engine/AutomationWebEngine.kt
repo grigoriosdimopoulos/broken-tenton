@@ -219,13 +219,43 @@ class AutomationWebEngine(
             }.getOrNull()
         }
 
-    /** When a real screenshot isn't possible, save the page's URL + visible text as a .txt file. */
-    private fun saveTextSnapshot(wv: WebView, tag: String, dir: File): String? {
+    /** When a real screenshot isn't possible, save the page's URL + visible body text as a .txt file. */
+    private suspend fun saveTextSnapshot(wv: WebView, tag: String, dir: File): String? {
         return runCatching {
             val url = wv.url ?: "unknown"
             val title = wv.title ?: "unknown"
+
+            // Capture visible page text via JS on Main thread — no special permission needed
+            val bodyText: String = withContext(Dispatchers.Main) {
+                runCatching {
+                    withTimeout(2_000) {
+                        suspendCancellableCoroutine { cont ->
+                            wv.evaluateJavascript(
+                                "(document.body ? document.body.innerText : '').replace(/\\s+/g,' ').substring(0,2000)"
+                            ) { result ->
+                                val text = result
+                                    ?.removeSurrounding("\"")
+                                    ?.replace("\\n", "\n")
+                                    ?.replace("\\\"", "\"")
+                                    ?: ""
+                                cont.resume(text)
+                            }
+                        }
+                    }
+                }.getOrDefault("")
+            }
+
             val file = File(dir, "${tag}_${System.currentTimeMillis()}.txt")
-            file.writeText("URL: $url\nTitle: $title\n[Screenshot unavailable — grant 'Display over other apps' permission in Android Settings for real screenshots]")
+            file.writeText(buildString {
+                appendLine("URL: $url")
+                appendLine("Title: $title")
+                appendLine("---")
+                if (bodyText.isNotBlank()) {
+                    appendLine(bodyText)
+                } else {
+                    appendLine("[No page content captured — grant 'Display over other apps' in Android Settings for real screenshots]")
+                }
+            })
             file.absolutePath
         }.getOrNull()
     }
