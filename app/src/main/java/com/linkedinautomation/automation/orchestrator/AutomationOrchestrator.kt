@@ -325,7 +325,8 @@ class AutomationOrchestrator @Inject constructor(
                 // 1. Extract page context
                 val contextJson = runCatching {
                     val script = jsLoader.load(ScriptRegistry.EXTRACT_PAGE_CONTEXT)
-                    engine.runJs("ctx_$step", script, 10_000)
+                    // Tag MUST match AndroidBridge.onResult('extract_ctx', ...) in the JS
+                    engine.runJs("extract_ctx", script, 10_000)
                 }.getOrElse { e ->
                     log("SmartApply step $step: context extraction failed — ${e.message}")
                     "{}"

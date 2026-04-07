@@ -4,6 +4,9 @@ import com.linkedinautomation.domain.model.ClaudeUsageLog
 import com.linkedinautomation.domain.model.UserPreferences
 import com.linkedinautomation.domain.repository.ClaudeUsageLogRepository
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -55,40 +58,62 @@ class ClaudePageNavigator @Inject constructor(
         val systemPrompt = buildSystemPrompt(prefs, jobTitle, company)
         val userMessage = "Step $step.\nPage context:\n$pageContextJson"
 
+        if (apiKey.isBlank()) return "DONE:FAILED:Claude API key not set — add it in Settings → Claude AI"
+
         val requestJson = buildRequest(systemPrompt, userMessage)
-        val request = Request.Builder()
-            .url("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", apiKey)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .post(requestJson.toRequestBody("application/json".toMediaType()))
-            .build()
 
-        val response = runCatching { client.newCall(request).execute() }.getOrElse { e ->
-            return "DONE:FAILED:Claude API unreachable: ${e.message}"
+        // Retry up to 2 times on network error
+        var lastError = "unknown"
+        repeat(2) { attempt ->
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val request = Request.Builder()
+                        .url("https://api.anthropic.com/v1/messages")
+                        .header("x-api-key", apiKey)
+                        .header("anthropic-version", "2023-06-01")
+                        .header("content-type", "application/json")
+                        .post(requestJson.toRequestBody("application/json".toMediaType()))
+                        .build()
+                    client.newCall(request).execute()
+                }
+            }
+            val response = result.getOrElse { e ->
+                lastError = "${e::class.simpleName}: ${e.message ?: "no message"}"
+                if (attempt == 0) delay(2000)
+                return@runCatching null
+            } ?: return@repeat
+
+            val bodyStr = response.body?.string() ?: run {
+                lastError = "empty response body"
+                return@repeat
+            }
+            if (!response.isSuccessful) {
+                lastError = "HTTP ${response.code}: ${bodyStr.take(120)}"
+                return@repeat
+            }
+
+            val parsed = runCatching {
+                moshi.adapter(ClaudeResponse::class.java).fromJson(bodyStr)
+            }.getOrNull() ?: run {
+                lastError = "could not parse response"
+                return@repeat
+            }
+
+            val rawAction = parsed.content.firstOrNull()?.text?.trim() ?: ""
+            val action = cleanAction(rawAction)
+
+            usageLogRepo.save(ClaudeUsageLog(
+                question = "SmartApply step $step for $jobTitle @ $company",
+                answer = action.take(200),
+                inputTokens = parsed.usage?.inputTokens ?: 0,
+                outputTokens = parsed.usage?.outputTokens ?: 0,
+                jobTitle = jobTitle,
+                company = company,
+                timestamp = System.currentTimeMillis()
+            ))
+            return action
         }
-        val bodyStr = response.body?.string() ?: return "DONE:FAILED:empty Claude response"
-        if (!response.isSuccessful) return "DONE:FAILED:Claude API error ${response.code}"
-
-        val parsed = runCatching {
-            moshi.adapter(ClaudeResponse::class.java).fromJson(bodyStr)
-        }.getOrNull() ?: return "DONE:FAILED:could not parse Claude response"
-
-        val rawAction = parsed.content.firstOrNull()?.text?.trim() ?: ""
-        val action = cleanAction(rawAction)
-
-        // Log usage
-        usageLogRepo.save(ClaudeUsageLog(
-            question = "SmartApply step $step for $jobTitle @ $company",
-            answer = action.take(200),
-            inputTokens = parsed.usage?.inputTokens ?: 0,
-            outputTokens = parsed.usage?.outputTokens ?: 0,
-            jobTitle = jobTitle,
-            company = company,
-            timestamp = System.currentTimeMillis()
-        ))
-
-        return action
+        return "DONE:FAILED:Claude API unreachable after retries — $lastError"
     }
 
     /** Strip markdown code fences if Claude wrapped the JS in them */
