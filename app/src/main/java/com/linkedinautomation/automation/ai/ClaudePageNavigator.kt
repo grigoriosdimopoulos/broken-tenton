@@ -18,35 +18,27 @@ import javax.inject.Singleton
 /**
  * Uses Claude to analyze the current page state and return a JavaScript action.
  *
- * Instead of fragile hardcoded DOM selectors, this class sends the page structure
- * (buttons, inputs, visible text) to Claude and asks it what JavaScript to execute
- * to advance the job application. Claude returns either:
- *   - JavaScript to run (clicks a button, fills an input, etc.)
- *   - "DONE:APPLIED"   — application confirmed submitted
- *   - "DONE:FAILED:reason" — cannot proceed
+ * Instead of fragile hardcoded DOM selectors, each step sends the live page
+ * structure (buttons, inputs, visible text) to Claude Sonnet. Claude returns
+ * plain JavaScript to execute — no hardcoded selectors that break on DOM changes.
+ *
+ * Returns one of:
+ *  - JavaScript string to execute
+ *  - "DONE:APPLIED"     — application confirmed submitted
+ *  - "DONE:FAILED:why"  — cannot proceed
  */
 @Singleton
 class ClaudePageNavigator @Inject constructor(
     private val usageLogRepo: ClaudeUsageLogRepository
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(45, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val moshi = Moshi.Builder().build()
 
-    /**
-     * Given a JSON page context snapshot, return the next JavaScript action.
-     *
-     * @param pageContextJson  Output of extract_page_context.js
-     * @param jobTitle         Job being applied for
-     * @param company          Company name
-     * @param step             Current step number (for logging)
-     * @param prefs            User preferences (for personal info)
-     * @param apiKey           Claude API key
-     * @return JavaScript string to execute, or "DONE:APPLIED" / "DONE:FAILED:reason"
-     */
     suspend fun getNextAction(
         pageContextJson: String,
         jobTitle: String,
@@ -55,136 +47,140 @@ class ClaudePageNavigator @Inject constructor(
         prefs: UserPreferences,
         apiKey: String
     ): String {
-        val systemPrompt = buildSystemPrompt(prefs, jobTitle, company)
-        val userMessage = "Step $step.\nPage context:\n$pageContextJson"
+        if (apiKey.isBlank()) {
+            return "DONE:FAILED:Claude API key not set — add it in Settings → Claude AI"
+        }
 
-        if (apiKey.isBlank()) return "DONE:FAILED:Claude API key not set — add it in Settings → Claude AI"
+        val system = buildSystemPrompt(prefs, jobTitle, company)
+        val userMsg = "Step $step. Page context:\n$pageContextJson"
+        val bodyJson = buildRequestBody(system, userMsg)
 
-        val requestJson = buildRequest(systemPrompt, userMessage)
-
-        // Retry up to 2 times on network error
+        // Retry once on transient network failure
         var lastError = "unknown"
-        repeat(2) { attempt ->
-            val result = withContext(Dispatchers.IO) {
+        for (attempt in 1..2) {
+            if (attempt > 1) delay(3000L)
+
+            val httpResult: Result<okhttp3.Response> = withContext(Dispatchers.IO) {
                 runCatching {
-                    val request = Request.Builder()
+                    val req = Request.Builder()
                         .url("https://api.anthropic.com/v1/messages")
                         .header("x-api-key", apiKey)
                         .header("anthropic-version", "2023-06-01")
                         .header("content-type", "application/json")
-                        .post(requestJson.toRequestBody("application/json".toMediaType()))
+                        .post(bodyJson.toRequestBody("application/json".toMediaType()))
                         .build()
-                    client.newCall(request).execute()
+                    client.newCall(req).execute()
                 }
             }
-            val response = result.getOrElse { e ->
-                lastError = "${e::class.simpleName}: ${e.message ?: "no message"}"
-                if (attempt == 0) delay(2000)
-                return@runCatching null
-            } ?: return@repeat
 
-            val bodyStr = response.body?.string() ?: run {
-                lastError = "empty response body"
-                return@repeat
+            val ex = httpResult.exceptionOrNull()
+            if (ex != null) {
+                lastError = "${ex.javaClass.simpleName}: ${ex.message ?: "(no message)"}"
+                continue
+            }
+
+            val response = httpResult.getOrNull() ?: continue
+            val rawBody = withContext(Dispatchers.IO) {
+                runCatching { response.body?.string() }.getOrNull()
+            }
+            if (rawBody.isNullOrBlank()) {
+                lastError = "HTTP ${response.code}: empty body"
+                continue
             }
             if (!response.isSuccessful) {
-                lastError = "HTTP ${response.code}: ${bodyStr.take(120)}"
-                return@repeat
+                lastError = "HTTP ${response.code}: ${rawBody.take(150)}"
+                continue
             }
 
             val parsed = runCatching {
-                moshi.adapter(ClaudeResponse::class.java).fromJson(bodyStr)
-            }.getOrNull() ?: run {
-                lastError = "could not parse response"
-                return@repeat
+                moshi.adapter(ClaudeResponse::class.java).fromJson(rawBody)
+            }.getOrElse { e ->
+                lastError = "JSON parse error: ${e.message}"
+                null
+            } ?: continue
+
+            val raw = parsed.content.firstOrNull()?.text?.trim() ?: ""
+            val action = stripFences(raw)
+
+            // Log usage asynchronously (don't fail the apply if this fails)
+            runCatching {
+                usageLogRepo.save(ClaudeUsageLog(
+                    question = "SmartApply step $step — $jobTitle @ $company",
+                    answer = action.take(200),
+                    inputTokens = parsed.usage?.inputTokens ?: 0,
+                    outputTokens = parsed.usage?.outputTokens ?: 0,
+                    jobTitle = jobTitle,
+                    company = company,
+                    timestamp = System.currentTimeMillis()
+                ))
             }
 
-            val rawAction = parsed.content.firstOrNull()?.text?.trim() ?: ""
-            val action = cleanAction(rawAction)
-
-            usageLogRepo.save(ClaudeUsageLog(
-                question = "SmartApply step $step for $jobTitle @ $company",
-                answer = action.take(200),
-                inputTokens = parsed.usage?.inputTokens ?: 0,
-                outputTokens = parsed.usage?.outputTokens ?: 0,
-                jobTitle = jobTitle,
-                company = company,
-                timestamp = System.currentTimeMillis()
-            ))
             return action
         }
-        return "DONE:FAILED:Claude API unreachable after retries — $lastError"
+
+        return "DONE:FAILED:Claude API error after ${ if (lastError.length > 100) lastError.take(100) + "…" else lastError }"
     }
 
-    /** Strip markdown code fences if Claude wrapped the JS in them */
-    private fun cleanAction(raw: String): String {
+    /** Remove markdown code fences Claude sometimes wraps JS in */
+    private fun stripFences(raw: String): String {
         if (raw.startsWith("DONE:")) return raw
         return raw
-            .removePrefix("```javascript").removePrefix("```js").removePrefix("```")
+            .trimStart()
+            .removePrefix("```javascript")
+            .removePrefix("```js")
+            .removePrefix("```")
+            .trimEnd()
             .removeSuffix("```")
             .trim()
     }
 
-    private fun buildSystemPrompt(prefs: UserPreferences, jobTitle: String, company: String): String = """
-You are an expert web automation agent. Your task: apply for a job on behalf of the user by controlling a WebView browser.
+    private fun buildSystemPrompt(prefs: UserPreferences, jobTitle: String, company: String): String {
+        val email = prefs.email.ifBlank { prefs.linkedInEmail }
+        return """
+You are a browser automation agent applying for a job on behalf of a user.
 
-JOB TARGET: "$jobTitle" at "$company"
+TARGET JOB: "$jobTitle" at "$company"
 
-USER DETAILS (use these to fill forms):
-- Full name: ${prefs.firstName} ${prefs.lastName}
-- Email: ${prefs.email.ifBlank { prefs.linkedInEmail }}
+USER DETAILS — use to fill forms:
+- Name: ${prefs.firstName} ${prefs.lastName}
+- Email: $email
 - Phone: ${prefs.phone}
-- City: ${prefs.city}
-- Country: ${prefs.country}
-- LinkedIn URL: ${prefs.linkedInUrl}
-- Current title: ${prefs.currentJobTitle}
-- Years of experience: ${prefs.yearsOfExperience}
-- Bio summary: ${prefs.experienceBio.take(300)}
+- City/Country: ${prefs.city}, ${prefs.country}
+- LinkedIn: ${prefs.linkedInUrl}
+- Job title: ${prefs.currentJobTitle}
+- Years experience: ${prefs.yearsOfExperience}
+- Bio: ${prefs.experienceBio.take(250)}
+- Min salary: ${if (prefs.minSalary > 0) "${prefs.minSalary}k+" else "flexible"}
 
-Each step you receive a JSON snapshot of the current page (buttons, inputs, headings, alerts, URL).
-Respond with ONE of:
-1. Plain JavaScript (no markdown fences) to execute in the page — must advance the application
-2. Exactly "DONE:APPLIED" when you detect a success/confirmation message
-3. Exactly "DONE:FAILED:reason" if stuck (CAPTCHA, already applied, no apply button, fatal error)
+You receive a JSON snapshot of the live page each step (buttons with CSS selectors, inputs with labels/types, page text, URL). Return EXACTLY one of:
+A) Plain JavaScript to execute (no markdown, no explanation)
+B) The string: DONE:APPLIED
+C) The string: DONE:FAILED:reason
 
 JAVASCRIPT RULES:
-- Use the `sel` selectors from the JSON — they are already computed for each element
-- To click a button: `document.querySelector('<sel>').click()`
-- To fill a text input: var el=document.querySelector('<sel>'); el.value='<val>'; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
-- To select a dropdown option: var s=document.querySelector('<sel>'); s.value='<val>'; s.dispatchEvent(new Event('change',{bubbles:true}));
-- For checkboxes/radio buttons: use .click() if not already checked
-- For experience years questions: use ${prefs.yearsOfExperience} unless asked for a specific skill
-- Answer "yes" to "Are you authorized to work?" type questions; answer honestly for salary (${prefs.minSalary}k+)
-- If a form page has BOTH unfilled required inputs AND a Next/Submit button: fill all inputs FIRST, then click Next
-- If all required inputs are filled and there's a Submit button: click Submit
-- If there's an Easy Apply button and no modal: click it to open the modal
-- Never click Dismiss, Cancel, or Close unless truly stuck
+- Buttons: `document.querySelector('<sel>').click()`
+- Fill text: `(function(){var e=document.querySelector('<sel>');e.value='<v>';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`
+- Select dropdown: `(function(){var s=document.querySelector('<sel>');s.value='<v>';s.dispatchEvent(new Event('change',{bubbles:true}));})()`
+- Checkbox/radio: `.click()` to toggle
+- If the page has UNFILLED required inputs AND a Next/Submit button: fill all inputs first, THEN click the button — do both in ONE JS block
+- If all required inputs appear filled and Submit is visible: click Submit
+- If Easy Apply button exists and no modal is open: click it
+- Use ${prefs.yearsOfExperience} for years-of-experience questions
+- Authorize to work: yes. Salary expectation: ${if (prefs.minSalary > 0) prefs.minSalary * 1000 else "negotiable"}
+- NEVER click Cancel, Dismiss, or Close
 
-SUCCESS DETECTION (return DONE:APPLIED if you see any of these):
-- "Application submitted", "Applied", "Your application was sent", "Done!", "You've applied"
-- URL contains "/apply/success" or similar
-- A green checkmark confirmation screen
+RETURN DONE:APPLIED if body text contains: "application was sent", "you've applied", "application submitted", "done!" on a confirmation screen, or URL contains "/apply/success"
+RETURN DONE:FAILED:already applied — if body says "you've already applied"
+RETURN DONE:FAILED:job closed — if "no longer accepting applications"
+RETURN DONE:FAILED:captcha — if CAPTCHA is visible
+RETURN DONE:FAILED:no apply button — if step 1 and there is no Easy Apply or Apply button at all
 
-FAILURE DETECTION (return DONE:FAILED:reason if you see):
-- "Already applied", "You've already applied" → DONE:FAILED:already applied
-- CAPTCHA or "verify you're human" → DONE:FAILED:captcha required
-- "This job is no longer accepting applications" → DONE:FAILED:job closed
-- After 3+ steps on same page with same buttons and no progress → DONE:FAILED:stuck on page
-
-Return ONLY the JavaScript or DONE: string. No explanation, no markdown.
-    """.trimIndent()
-
-    private fun buildRequest(system: String, userMsg: String): String {
-        val adapter = moshi.adapter(String::class.java)
-        return """
-{
-  "model": "claude-sonnet-4-6",
-  "max_tokens": 1024,
-  "system": ${adapter.toJson(system)},
-  "messages": [
-    {"role": "user", "content": ${adapter.toJson(userMsg)}}
-  ]
-}
+Return ONLY the JavaScript or DONE: line. Nothing else.
         """.trimIndent()
+    }
+
+    private fun buildRequestBody(system: String, userMsg: String): String {
+        val adapter = moshi.adapter(String::class.java)
+        return """{"model":"claude-sonnet-4-6","max_tokens":1024,"system":${adapter.toJson(system)},"messages":[{"role":"user","content":${adapter.toJson(userMsg)}}]}"""
     }
 }

@@ -1,102 +1,83 @@
 (function() {
+  // Always call onResult (never onError) so runJs never times out.
+  // Even on exception, return what we know.
   try {
-    // Helper: get visible, deduplicated text from an element
-    function visibleText(el) {
-      if (!el) return '';
-      var t = (el.innerText || '').trim();
-      if (t) return t.substring(0, 80);
-      var c = el.cloneNode(true);
-      c.querySelectorAll('[aria-hidden="true"],.visually-hidden,.sr-only').forEach(function(n){n.remove();});
-      return c.textContent.trim().substring(0, 80);
-    }
-
-    // Helper: unique CSS selector for an element
-    function selector(el) {
+    // Simple selector builder
+    function sel(el) {
       if (el.id) return '#' + el.id;
-      if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
-      // walk up tree to build a path
-      var parts = [];
-      var cur = el;
-      for (var i = 0; i < 4 && cur && cur !== document.body; i++) {
-        var tag = cur.tagName.toLowerCase();
-        if (cur.id) { parts.unshift('#' + cur.id); break; }
-        var cls = Array.from(cur.classList).filter(function(c){
-          return c.length > 2 && !/^(artdeco|ember|linkedin|fb-)/.test(c);
-        }).slice(0, 2).join('.');
-        parts.unshift(cls ? tag + '.' + cls : tag);
-        cur = cur.parentElement;
-      }
-      return parts.join(' > ');
+      if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name.replace(/"/g,'\\"') + '"]';
+      var cls = (el.className || '').split(' ').filter(function(c){ return c.length > 2; })[0] || '';
+      return cls ? el.tagName.toLowerCase() + '.' + cls : el.tagName.toLowerCase();
     }
 
     var buttons = [];
-    document.querySelectorAll('button:not([disabled]), input[type=submit]:not([disabled]), input[type=button]:not([disabled]), a[role=button]').forEach(function(el, i) {
-      if (el.offsetParent === null) return; // not visible
-      buttons.push({
-        i: buttons.length,
-        text: visibleText(el).substring(0, 60),
-        sel: selector(el),
-        type: el.type || el.getAttribute('role') || ''
-      });
-      if (buttons.length >= 15) return;
-    });
+    var btnEls = document.querySelectorAll('button, input[type=submit], input[type=button], [role=button], a[role=button]');
+    for (var i = 0; i < btnEls.length && buttons.length < 20; i++) {
+      var b = btnEls[i];
+      if (b.disabled) continue;
+      var txt = (b.innerText || b.value || b.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ');
+      if (!txt) continue;
+      buttons.push({ i: buttons.length, text: txt.substring(0, 60), sel: sel(b) });
+    }
 
     var inputs = [];
-    document.querySelectorAll('input, textarea, select').forEach(function(el) {
-      if (el.offsetParent === null) return;
-      if (el.type === 'hidden') return;
-      var labelEl = el.id ? document.querySelector('label[for="' + el.id + '"]') : null;
-      var ariaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || '';
-      if (ariaLabel && !labelEl) {
-        var ref = document.getElementById(ariaLabel);
-        if (ref) ariaLabel = visibleText(ref);
+    var inpEls = document.querySelectorAll('input, textarea, select');
+    for (var j = 0; j < inpEls.length && inputs.length < 20; j++) {
+      var inp = inpEls[j];
+      if (inp.type === 'hidden') continue;
+      var lbl = '';
+      if (inp.id) {
+        var labelEl = document.querySelector('label[for="' + inp.id + '"]');
+        if (labelEl) lbl = (labelEl.innerText || '').trim();
+      }
+      if (!lbl) lbl = inp.getAttribute('aria-label') || inp.placeholder || inp.name || '';
+      var opts = [];
+      if (inp.tagName === 'SELECT') {
+        for (var k = 0; k < Math.min(inp.options.length, 12); k++) {
+          opts.push({ val: inp.options[k].value, txt: inp.options[k].text.trim() });
+        }
       }
       inputs.push({
-        sel: selector(el),
-        type: (el.tagName === 'SELECT' ? 'select' : (el.type || el.tagName.toLowerCase())),
-        label: labelEl ? visibleText(labelEl) : ariaLabel,
-        placeholder: el.placeholder || '',
-        required: !!el.required,
-        value: el.value ? el.value.substring(0, 30) : '',
-        options: el.tagName === 'SELECT'
-          ? Array.from(el.options).slice(0,10).map(function(o){return {val:o.value,text:o.text.trim()};})
-          : []
+        sel: sel(inp),
+        type: inp.tagName === 'SELECT' ? 'select' : (inp.type || inp.tagName.toLowerCase()),
+        label: lbl.substring(0, 60),
+        required: !!inp.required,
+        value: (inp.value || '').substring(0, 40),
+        options: opts
       });
-      if (inputs.length >= 20) return;
-    });
+    }
+
+    var headings = [];
+    var hEls = document.querySelectorAll('h1, h2, h3');
+    for (var h = 0; h < hEls.length && headings.length < 6; h++) {
+      var ht = (hEls[h].innerText || '').trim();
+      if (ht) headings.push(ht.substring(0, 80));
+    }
 
     var hasModal = !!(
       document.querySelector('[role=dialog]') ||
       document.querySelector('.artdeco-modal') ||
-      document.querySelector('[class*="easy-apply-modal"]') ||
-      document.querySelector('[class*="easyApply"]')
+      document.querySelector('[class*="easy-apply"]') ||
+      document.querySelector('[class*="modal"][style*="display: block"]')
     );
 
-    var headings = Array.from(document.querySelectorAll('h1,h2,h3,h4'))
-      .filter(function(h){ return h.offsetParent !== null; })
-      .map(function(h){ return visibleText(h); })
-      .filter(function(t){ return t.length > 1; })
-      .slice(0, 6);
-
-    var alerts = Array.from(document.querySelectorAll('[role=alert],[role=status],.error,.form-error'))
-      .filter(function(el){ return el.offsetParent !== null; })
-      .map(function(el){ return visibleText(el).substring(0, 100); })
-      .filter(function(t){ return t.length > 0; })
-      .slice(0, 5);
-
     var ctx = {
-      url:      location.href,
-      title:    document.title.substring(0, 120),
+      url:      location.href.substring(0, 300),
+      title:    document.title.substring(0, 100),
       headings: headings,
-      alerts:   alerts,
-      bodyText: (document.body.innerText || '').replace(/\s+/g,' ').substring(0, 600),
       hasModal: hasModal,
       buttons:  buttons,
-      inputs:   inputs
+      inputs:   inputs,
+      body:     (document.body ? document.body.innerText : '').replace(/\s+/g,' ').substring(0, 800)
     };
 
     AndroidBridge.onResult('extract_ctx', JSON.stringify(ctx));
   } catch(e) {
-    AndroidBridge.onError('extract_ctx', e.message || String(e));
+    // Still return result so runJs doesn't time out
+    AndroidBridge.onResult('extract_ctx', JSON.stringify({
+      error: String(e),
+      url: location.href || '',
+      buttons: [], inputs: [], headings: [], hasModal: false, body: ''
+    }));
   }
 })();
