@@ -301,4 +301,30 @@ class AutomationWebEngine(
             webView?.evaluateJavascript(script, null)
         }
     }
+
+    /**
+     * Executes [js] and waits up to [navWaitMs] for the page to finish loading
+     * (i.e. a navigation occurred). If the page loads within the timeout, returns
+     * "navigated:url". If no navigation in time (in-page DOM update, modal change
+     * etc.), returns "done".
+     *
+     * This replaces the old bridge-callback approach for SmartApply action steps.
+     * The bridge callback was unreliable because the old page's JS context is
+     * destroyed on navigation, so setTimeout-based onResult never fired → 12s timeout.
+     */
+    suspend fun executeJsAndWaitForNavigation(js: String, navWaitMs: Long = 4_000): String =
+        runCatching {
+            withTimeout(navWaitMs) {
+                suspendCancellableCoroutine { cont ->
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pageLoadedCallback = { url ->
+                            pageLoadedCallback = null
+                            if (!cont.isCompleted) cont.resume("navigated:$url")
+                        }
+                        webView?.evaluateJavascript(js, null)
+                        cont.invokeOnCancellation { pageLoadedCallback = null }
+                    }
+                }
+            }
+        }.getOrElse { "done" }
 }

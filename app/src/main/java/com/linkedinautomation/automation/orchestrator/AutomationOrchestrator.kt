@@ -322,8 +322,8 @@ class AutomationOrchestrator @Inject constructor(
         var stuckCount = 0
 
         try {
+            delay(1500) // initial settle before step 1
             for (step in 1..maxSteps) {
-                delay(1800) // let page / animation settle
 
                 // 1. Extract page context
                 val contextJson = runCatching {
@@ -441,33 +441,26 @@ class AutomationOrchestrator @Inject constructor(
                             "SmartApply step $step: bad response (not JS): ${action.take(200)}", currentUrl)
                     }
                     else -> {
-                        // Execute Claude's JavaScript via new Function() so syntax errors
-                        // are caught at runtime (not parse-time), ensuring AndroidBridge.onResult
-                        // is always called and runJs never times out from a bad response.
+                        // Encode action as a JSON string so new Function() can handle
+                        // syntax errors as runtime exceptions (caught, not fatal).
                         val encodedAction = action
                             .replace("\\", "\\\\")
                             .replace("\"", "\\\"")
                             .replace("\n", "\\n")
                             .replace("\r", "\\r")
-                        val wrappedJs = """
-(function(){
-  try {
-    (new Function("$encodedAction"))();
-  } catch(e) {
-    // ignore JS errors — page may still have updated
-  }
-  setTimeout(function(){
-    try { AndroidBridge.onResult('nav_$step','done'); } catch(e2){}
-  }, 900);
-})();
-                        """.trimIndent()
+                        val safeJs = """(function(){try{(new Function("$encodedAction"))();}catch(e){}})();"""
 
-                        runCatching {
-                            engine.runJs("nav_$step", wrappedJs, 12_000)
-                        }.onFailure { e ->
-                            // Timeout means a page navigation happened (new page didn't call onResult)
-                            log("SmartApply step $step: JS timeout (page navigated) — ${e.message}")
-                            delay(2000) // let new page load
+                        // executeJsAndWaitForNavigation uses onPageFinished, not a bridge callback.
+                        // Bridge callbacks are destroyed when the page navigates, causing 12s timeouts.
+                        // This method returns as soon as a page load is detected (fast) or after
+                        // navWaitMs if no navigation (in-page modal update).
+                        val navResult = engine.executeJsAndWaitForNavigation(safeJs, navWaitMs = 4_000)
+                        if (navResult.startsWith("navigated:")) {
+                            val newUrl = navResult.removePrefix("navigated:")
+                            log("SmartApply step $step: navigated to $newUrl")
+                            delay(1500) // let new page fully render after onPageFinished
+                        } else {
+                            delay(600) // short settle for modal/DOM update (no navigation)
                         }
                     }
                 }
