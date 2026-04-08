@@ -17,7 +17,8 @@
       if (b.disabled) continue;
       var txt = (b.innerText || b.value || b.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ');
       if (!txt) continue;
-      buttons.push({ i: buttons.length, text: txt.substring(0, 60), sel: sel(b) });
+      var href = (b.tagName === 'A' && b.href) ? b.href.substring(0, 300) : '';
+      buttons.push({ i: buttons.length, text: txt.substring(0, 60), sel: sel(b), href: href });
     }
 
     var inputs = [];

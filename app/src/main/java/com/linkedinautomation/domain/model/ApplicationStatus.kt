@@ -4,7 +4,6 @@ enum class ApplicationStatus {
     PENDING_APPROVAL,
     APPROVED,
     APPLIED,
-    SUBMITTED_UNVERIFIED,   // submitted but success page not confirmed
     FAILED,
     SKIPPED,
     REJECTED

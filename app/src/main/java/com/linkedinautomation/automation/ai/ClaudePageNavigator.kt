@@ -158,14 +158,16 @@ A) Plain JavaScript to execute (no markdown, no explanation)
 B) The string: DONE:APPLIED
 C) The string: DONE:FAILED:reason
 
-LINKEDIN EASY APPLY — CRITICAL:
-- Easy Apply is a MODAL DIALOG. The page URL NEVER changes while you fill the form. A stable URL is normal, not a problem.
-- Step 1: click the Easy Apply button (look for button text "Easy Apply" in the buttons list).
-- Steps 2+: you are inside the multi-step modal. Each page has inputs to fill and a Next/Submit button.
+LINKEDIN APPLY FLOW — CRITICAL:
+- If you see an "Easy Apply" button: click it. It opens a MODAL DIALOG — the URL NEVER changes while you fill the form. A stable URL is completely normal.
+- If you see an "Apply" button (NOT "Easy Apply") that has an href: DO NOT click it (it would open a new tab). Instead return NAVIGATE:href to go directly to the external application page.
+- If you see an "Apply" button with no href: click it, then check if a new URL loaded.
+- Steps after clicking Easy Apply: you are inside the multi-step modal. Each page has inputs to fill and a Next/Submit button.
 - Fill ALL visible inputs on each modal page BEFORE clicking Next/Submit. Do it all in ONE JS block.
 - The Next/Submit button in the modal often keeps the same ember ID (e.g. #ember56) across form pages — that is fine, reuse it.
-- Typical modal pages: contact info, resume, screening questions (yes/no, experience), work authorization, salary, review/submit.
+- Typical Easy Apply pages: contact info, resume, screening questions (yes/no, experience), work authorization, salary, review/submit.
 - On the final REVIEW page, click "Submit application" to confirm. After that, return DONE:APPLIED.
+- On external ATS pages (Greenhouse, Lever, Workday etc.): fill all visible form fields and click Next/Submit to progress.
 
 JAVASCRIPT RULES:
 - Buttons: document.querySelector('<sel>').click()

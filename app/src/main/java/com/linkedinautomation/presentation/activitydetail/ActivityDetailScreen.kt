@@ -1,5 +1,6 @@
 package com.linkedinautomation.presentation.activitydetail
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -8,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -187,37 +189,69 @@ fun ActivityDetailScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(Modifier.height(8.dp))
-                        if (ssPath.endsWith(".txt")) {
-                            val text = remember(ssPath) {
-                                runCatching { File(ssPath).readText() }.getOrNull()
-                            }
-                            if (!text.isNullOrBlank()) {
-                                Text(text, style = MaterialTheme.typography.bodySmall)
-                            }
-                        } else {
-                            val bitmap = remember(ssPath) {
-                                runCatching {
-                                    BitmapFactory.decodeFile(ssPath)?.asImageBitmap()
-                                }.getOrNull()
-                            }
-                            if (bitmap != null) {
-                                Card(
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Image(
-                                        bitmap = bitmap,
-                                        contentDescription = "Page screenshot",
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentScale = ContentScale.FillWidth
+                        when {
+                            ssPath.endsWith(".html") -> {
+                                // Render the saved HTML page proof in a mini WebView
+                                val htmlContent = remember(ssPath) {
+                                    runCatching { File(ssPath).readText() }.getOrNull()
+                                }
+                                if (!htmlContent.isNullOrBlank()) {
+                                    @SuppressLint("SetJavaScriptEnabled")
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            android.webkit.WebView(ctx).apply {
+                                                settings.javaScriptEnabled = false
+                                                settings.loadWithOverviewMode = true
+                                                settings.useWideViewPort = true
+                                                // Load with the original page URL as base so relative links resolve
+                                                loadDataWithBaseURL(
+                                                    entry.url ?: "about:blank",
+                                                    htmlContent,
+                                                    "text/html",
+                                                    "UTF-8",
+                                                    null
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(480.dp)
                                     )
                                 }
-                            } else {
-                                Text(
-                                    "Screenshot file exists but could not be decoded.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            }
+                            ssPath.endsWith(".txt") -> {
+                                val text = remember(ssPath) {
+                                    runCatching { File(ssPath).readText() }.getOrNull()
+                                }
+                                if (!text.isNullOrBlank()) {
+                                    Text(text, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            else -> {
+                                val bitmap = remember(ssPath) {
+                                    runCatching {
+                                        BitmapFactory.decodeFile(ssPath)?.asImageBitmap()
+                                    }.getOrNull()
+                                }
+                                if (bitmap != null) {
+                                    Card(
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Image(
+                                            bitmap = bitmap,
+                                            contentDescription = "Page screenshot",
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentScale = ContentScale.FillWidth
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        "Screenshot file exists but could not be decoded.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

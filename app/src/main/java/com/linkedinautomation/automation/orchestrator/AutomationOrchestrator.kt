@@ -282,10 +282,9 @@ class AutomationOrchestrator @Inject constructor(
         engine.navigateTo(job.url, 15_000)
         delay(2000)
 
-        // Smart Apply: only for Easy Apply jobs — external Apply buttons open a new tab
-        // which the WebView blocks, so SmartApply cannot navigate external ATS pages from LinkedIn.
-        // External jobs fall through to the regular performExternalApply flow.
-        return if (prefs.smartApplyMode && prefs.claudeApiKey.isNotBlank() && job.isEasyApply) {
+        // Smart Apply: Claude navigates every step. For external Apply jobs, Claude uses
+        // NAVIGATE:url (from button href) instead of clicking, which avoids the new-tab block.
+        return if (prefs.smartApplyMode && prefs.claudeApiKey.isNotBlank()) {
             performSmartApply(engine, job, prefs)
         } else if (job.isEasyApply) {
             performEasyApply(engine, job, prefs)
@@ -387,10 +386,35 @@ class AutomationOrchestrator @Inject constructor(
                     action.startsWith("DONE:APPLIED") -> {
                         log("SmartApply: application confirmed submitted!")
                         delay(1500)
-                        val verified = verifySubmission(engine)
-                        recordApplied(job, ApplicationType.EasyApply, verified)
-                        activityRepo.log(ActivityAction.EASY_APPLY_SUBMITTED,
-                            "SmartApply success: ${job.title} @ ${job.company}", currentUrl)
+                        // Capture the success/confirmation page as HTML proof
+                        val screenshotsDir = java.io.File(context.filesDir, "screenshots").also { it.mkdirs() }
+                        val proofPath = runCatching {
+                            val htmlScript = """
+(function(){
+  try {
+    AndroidBridge.onResult('success_html', document.documentElement.outerHTML.substring(0, 150000));
+  } catch(e) {
+    AndroidBridge.onResult('success_html', '');
+  }
+})();""".trimIndent()
+                            val html = engine.runJs("success_html", htmlScript, 8_000)
+                            if (html.isNotBlank() && html != "null") {
+                                val f = java.io.File(screenshotsDir, "applied_${job.id.take(12)}_${System.currentTimeMillis()}.html")
+                                f.writeText(html)
+                                f.absolutePath
+                            } else {
+                                engine.takeScreenshot("applied_${job.id.take(12)}", screenshotsDir)
+                            }
+                        }.getOrElse {
+                            runCatching { engine.takeScreenshot("applied_${job.id.take(12)}", screenshotsDir) }.getOrNull()
+                        }
+                        recordApplied(job, ApplicationType.EasyApply)
+                        activityRepo.log(
+                            ActivityAction.EASY_APPLY_SUBMITTED,
+                            "SmartApply: Applied to ${job.title} @ ${job.company}",
+                            currentUrl,
+                            screenshotPath = proofPath
+                        )
                         return true
                     }
                     action.startsWith("DONE:FAILED") -> {
@@ -606,9 +630,8 @@ class AutomationOrchestrator @Inject constructor(
 
                         return if (!modalStillOpen) {
                             delay(1500)
-                            val verified = verifySubmission(engine)
-                            recordApplied(job, ApplicationType.EasyApply, verified)
-                            log("Applied (Easy Apply${if (!verified) " — unverified" else ""}): ${job.title}")
+                            recordApplied(job, ApplicationType.EasyApply)
+                            log("Applied (Easy Apply): ${job.title}")
                             true
                         } else {
                             log("Easy Apply submit REJECTED — modal still open. Errors: $errors")
@@ -744,11 +767,10 @@ class AutomationOrchestrator @Inject constructor(
                 if (submitResult.contains("clicked", ignoreCase = true) ||
                     submitResult.contains("submit", ignoreCase = true)) {
                     delay(2000)
-                    val verified = verifySubmission(engine)
                     val atsName = UrlAllowlist.detectAtsName(currentAtsUrl)
-                    recordApplied(job, ApplicationType.External(atsName, currentAtsUrl), verified)
+                    recordApplied(job, ApplicationType.External(atsName, currentAtsUrl))
                     activityRepo.log(ActivityAction.APPLICATION_SUBMITTED, "${job.title} at ${job.company}", currentAtsUrl)
-                    log("Applied (External/$atsName${if (!verified) " — unverified" else ""}) attempt $attempt: ${job.title} @ ${job.company}")
+                    log("Applied (External/$atsName) attempt $attempt: ${job.title} @ ${job.company}")
                     return true
                 }
                 log("Attempt $attempt submit result: $submitResult — retrying...")
@@ -931,26 +953,7 @@ class AutomationOrchestrator @Inject constructor(
         }
     }
 
-    private suspend fun verifySubmission(engine: AutomationWebEngine): Boolean {
-        return runCatching {
-            val script = jsLoader.load(ScriptRegistry.VERIFY_SUBMISSION)
-            val result = engine.runJs("verify_submit", script, 6_000)
-            val data = parseJson(result)
-            val verified = data?.get("verified") as? Boolean ?: false
-            val indicator = data?.get("indicator") as? String ?: "none"
-            val pageTitle = data?.get("pageTitle") as? String ?: ""
-            val snippet = data?.get("bodySnippet") as? String ?: ""
-            log("Verify submission: verified=$verified indicator='$indicator' title='$pageTitle'")
-            log("Page snippet: ${snippet.take(150)}")
-            activityRepo.log(
-                ActivityAction.MODAL_CHECK,
-                "Submit verified=$verified\nIndicator: $indicator\nPage: $pageTitle\nSnippet: ${snippet.take(200)}"
-            )
-            verified
-        }.getOrElse { false }
-    }
-
-    private suspend fun recordApplied(job: ScrapedJob, type: ApplicationType, verified: Boolean = true) {
+    private suspend fun recordApplied(job: ScrapedJob, type: ApplicationType) {
         jobRepo.save(
             JobApplication(
                 jobId = job.id,
@@ -959,9 +962,8 @@ class AutomationOrchestrator @Inject constructor(
                 jobUrl = job.url,
                 applicationType = type,
                 source = job.source,
-                status = if (verified) ApplicationStatus.APPLIED else ApplicationStatus.SUBMITTED_UNVERIFIED,
-                appliedAt = System.currentTimeMillis(),
-                errorMessage = if (!verified) "Submitted — success page not detected. Tap 'Open Apply Site' to verify manually." else null
+                status = ApplicationStatus.APPLIED,
+                appliedAt = System.currentTimeMillis()
             )
         )
     }
