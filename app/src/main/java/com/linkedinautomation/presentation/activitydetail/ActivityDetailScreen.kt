@@ -1,6 +1,5 @@
 package com.linkedinautomation.presentation.activitydetail
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -196,7 +195,6 @@ fun ActivityDetailScreen(
                                     runCatching { File(ssPath).readText() }.getOrNull()
                                 }
                                 if (!htmlContent.isNullOrBlank()) {
-                                    @SuppressLint("SetJavaScriptEnabled")
                                     AndroidView(
                                         factory = { ctx ->
                                             android.webkit.WebView(ctx).apply {
