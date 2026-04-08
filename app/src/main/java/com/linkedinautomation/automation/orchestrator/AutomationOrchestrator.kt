@@ -282,8 +282,10 @@ class AutomationOrchestrator @Inject constructor(
         engine.navigateTo(job.url, 15_000)
         delay(2000)
 
-        // Smart Apply: Claude analyzes each page and generates the right JS action
-        return if (prefs.smartApplyMode && prefs.claudeApiKey.isNotBlank()) {
+        // Smart Apply: only for Easy Apply jobs — external Apply buttons open a new tab
+        // which the WebView blocks, so SmartApply cannot navigate external ATS pages from LinkedIn.
+        // External jobs fall through to the regular performExternalApply flow.
+        return if (prefs.smartApplyMode && prefs.claudeApiKey.isNotBlank() && job.isEasyApply) {
             performSmartApply(engine, job, prefs)
         } else if (job.isEasyApply) {
             performEasyApply(engine, job, prefs)
@@ -314,7 +316,7 @@ class AutomationOrchestrator @Inject constructor(
         log("SmartApply: starting for ${job.title}")
 
         engine.enableApplyMode()
-        val maxSteps = 30
+        val maxSteps = 15 // LinkedIn Easy Apply forms never exceed ~8 pages; 15 is a safe ceiling
         // Stuck detection: same action + same page fingerprint repeated = truly stuck.
         // Deliberately NOT URL-based — LinkedIn Easy Apply is a modal that never changes the URL.
         var lastStuckKey = ""
