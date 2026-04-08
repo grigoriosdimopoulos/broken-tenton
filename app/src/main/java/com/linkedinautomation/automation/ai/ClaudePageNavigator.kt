@@ -51,9 +51,10 @@ class ClaudePageNavigator @Inject constructor(
             return "DONE:FAILED:Claude API key not set — add it in Settings → Claude AI"
         }
 
+        val model = prefs.smartApplyModel.ifBlank { "claude-haiku-4-5-20251001" }
         val system = buildSystemPrompt(prefs, jobTitle, company)
         val userMsg = "Step $step. Page context:\n$pageContextJson"
-        val bodyJson = buildRequestBody(system, userMsg)
+        val bodyJson = buildRequestBody(system, userMsg, model)
 
         // Retry once on transient network failure
         var lastError = "unknown"
@@ -157,30 +158,39 @@ A) Plain JavaScript to execute (no markdown, no explanation)
 B) The string: DONE:APPLIED
 C) The string: DONE:FAILED:reason
 
+LINKEDIN EASY APPLY — CRITICAL:
+- Easy Apply is a MODAL DIALOG. The page URL NEVER changes while you fill the form. A stable URL is normal, not a problem.
+- Step 1: click the Easy Apply button (look for button text "Easy Apply" in the buttons list).
+- Steps 2+: you are inside the multi-step modal. Each page has inputs to fill and a Next/Submit button.
+- Fill ALL visible inputs on each modal page BEFORE clicking Next/Submit. Do it all in ONE JS block.
+- The Next/Submit button in the modal often keeps the same ember ID (e.g. #ember56) across form pages — that is fine, reuse it.
+- Typical modal pages: contact info, resume, screening questions (yes/no, experience), work authorization, salary, review/submit.
+- On the final REVIEW page, click "Submit application" to confirm. After that, return DONE:APPLIED.
+
 JAVASCRIPT RULES:
-- Buttons: `document.querySelector('<sel>').click()`
-- Fill text: `(function(){var e=document.querySelector('<sel>');e.value='<v>';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`
-- Select dropdown: `(function(){var s=document.querySelector('<sel>');s.value='<v>';s.dispatchEvent(new Event('change',{bubbles:true}));})()`
-- Checkbox/radio: `.click()` to toggle
-- If the page has UNFILLED required inputs AND a Next/Submit button: fill all inputs first, THEN click the button — do both in ONE JS block
-- If all required inputs appear filled and Submit is visible: click Submit
-- If Easy Apply button exists and no modal is open: click it
-- Use ${prefs.yearsOfExperience} for years-of-experience questions
-- Authorize to work: yes. Salary expectation: ${if (prefs.minSalary > 0) prefs.minSalary * 1000 else "negotiable"}
+- Buttons: document.querySelector('<sel>').click()
+- Fill text input: (function(){var e=document.querySelector('<sel>');e.value='<v>';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()
+- Select dropdown: (function(){var s=document.querySelector('<sel>');s.value='<v>';s.dispatchEvent(new Event('change',{bubbles:true}));})()
+- Checkbox/radio: .click() to toggle
+- Combine fill+click into ONE self-invoking function block
+- Use ${prefs.yearsOfExperience} for any years-of-experience numeric inputs
+- Work authorization: yes. Sponsorship required: no.
+- Salary expectation: ${if (prefs.minSalary > 0) prefs.minSalary * 1000 else "negotiable"}
 - NEVER click Cancel, Dismiss, or Close
+- If a file-upload input for resume is present and no file is selected, skip it (LinkedIn uses profile resume)
 
-RETURN DONE:APPLIED if body text contains: "application was sent", "you've applied", "application submitted", "done!" on a confirmation screen, or URL contains "/apply/success"
-RETURN DONE:FAILED:already applied — if body says "you've already applied"
-RETURN DONE:FAILED:job closed — if "no longer accepting applications"
-RETURN DONE:FAILED:captcha — if CAPTCHA is visible
-RETURN DONE:FAILED:no apply button — if step 1 and there is no Easy Apply or Apply button at all
+RETURN DONE:APPLIED if body text contains "application was sent", "you've applied", "application submitted", or "done!" on a confirmation, or URL contains "/apply/success"
+RETURN DONE:FAILED:already applied — body says "you've already applied"
+RETURN DONE:FAILED:job closed — "no longer accepting applications"
+RETURN DONE:FAILED:captcha — CAPTCHA visible
+RETURN DONE:FAILED:no apply button — step 1, no Easy Apply or Apply button found
 
-Return ONLY the JavaScript or DONE: line. Nothing else.
+Return ONLY the JavaScript or DONE: line. No explanation, no markdown.
         """.trimIndent()
     }
 
-    private fun buildRequestBody(system: String, userMsg: String): String {
+    private fun buildRequestBody(system: String, userMsg: String, model: String): String {
         val adapter = moshi.adapter(String::class.java)
-        return """{"model":"claude-sonnet-4-6","max_tokens":1024,"system":${adapter.toJson(system)},"messages":[{"role":"user","content":${adapter.toJson(userMsg)}}]}"""
+        return """{"model":${adapter.toJson(model)},"max_tokens":600,"system":${adapter.toJson(system)},"messages":[{"role":"user","content":${adapter.toJson(userMsg)}}]}"""
     }
 }

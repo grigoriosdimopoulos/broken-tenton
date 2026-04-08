@@ -74,7 +74,9 @@ class SettingsViewModel @Inject constructor(
         keywords: List<String>, location: String,
         remoteOnly: Boolean, hybridOk: Boolean, onsiteOk: Boolean,
         excludeKeywords: List<String>, excludeCompanies: List<String>,
-        minSalary: Int = 0, scanLookbackDays: Int = 1, easyApplyMaxAttempts: Int = 5
+        minSalary: Int = 0, scanLookbackDays: Int = 1,
+        easyApplyMaxAttempts: Int = 5,
+        smartApplyModel: String = "claude-haiku-4-5-20251001"
     ) {
         viewModelScope.launch {
             val current = prefsRepo.get()
@@ -83,7 +85,8 @@ class SettingsViewModel @Inject constructor(
                 remoteOnly = remoteOnly, hybridOk = hybridOk, onsiteOk = onsiteOk,
                 excludeKeywords = excludeKeywords, excludeCompanies = excludeCompanies,
                 minSalary = minSalary, scanLookbackDays = scanLookbackDays,
-                easyApplyMaxAttempts = easyApplyMaxAttempts
+                easyApplyMaxAttempts = easyApplyMaxAttempts,
+                smartApplyModel = smartApplyModel
             ))
         }
     }

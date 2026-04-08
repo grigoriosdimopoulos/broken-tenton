@@ -55,5 +55,7 @@ data class UserPreferences(
     // Max Easy Apply attempts before giving up (or before AI assist kicks in)
     val easyApplyMaxAttempts: Int = 5,
     // When true, Claude drives ALL navigation instead of hardcoded JS selectors
-    val smartApplyMode: Boolean = false
+    val smartApplyMode: Boolean = false,
+    // Claude model used for SmartApply (default = Haiku for cost efficiency)
+    val smartApplyModel: String = "claude-haiku-4-5-20251001"
 )

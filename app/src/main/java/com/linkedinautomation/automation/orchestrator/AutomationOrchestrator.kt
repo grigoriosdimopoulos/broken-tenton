@@ -315,8 +315,10 @@ class AutomationOrchestrator @Inject constructor(
 
         engine.enableApplyMode()
         val maxSteps = 30
-        var lastPageUrl = ""
-        var samePageCount = 0
+        // Stuck detection: same action + same page fingerprint repeated = truly stuck.
+        // Deliberately NOT URL-based — LinkedIn Easy Apply is a modal that never changes the URL.
+        var lastStuckKey = ""
+        var stuckCount = 0
 
         try {
             for (step in 1..maxSteps) {
@@ -333,22 +335,6 @@ class AutomationOrchestrator @Inject constructor(
                 }
 
                 val currentUrl = engine.currentUrl ?: job.url
-
-                // Detect page-stuck loop (same URL, same content repeatedly)
-                if (currentUrl == lastPageUrl) {
-                    samePageCount++
-                    if (samePageCount >= 4) {
-                        val reason = "stuck on same page for $samePageCount steps ($currentUrl)"
-                        log("SmartApply: $reason")
-                        activityRepo.log(ActivityAction.EASY_APPLY_FAILED,
-                            "Smart Apply stuck: $reason", currentUrl)
-                        recordFailed(job, "Smart Apply: $reason")
-                        return false
-                    }
-                } else {
-                    samePageCount = 0
-                    lastPageUrl = currentUrl
-                }
 
                 // 2. Ask Claude what to do next
                 log("SmartApply step $step: asking Claude...")
@@ -371,6 +357,28 @@ class AutomationOrchestrator @Inject constructor(
                     "SmartApply step $step\nAction: ${action.take(300)}\nURL: $currentUrl",
                     currentUrl
                 )
+
+                // Stuck detection: same action AND same page fingerprint = nothing is changing.
+                // A "Next" button click that advances form pages will have the same action text
+                // but a DIFFERENT page fingerprint (new inputs/headings), so it won't count.
+                if (!action.startsWith("DONE:") && action.isNotBlank()) {
+                    val pageFingerprint = contextJson.length.toString() + contextJson.take(120)
+                    val stuckKey = "$action|$pageFingerprint"
+                    if (stuckKey == lastStuckKey) {
+                        stuckCount++
+                        if (stuckCount >= 3) {
+                            val reason = "action '${action.take(60)}' repeated $stuckCount times with no page change"
+                            log("SmartApply: stuck — $reason")
+                            activityRepo.log(ActivityAction.EASY_APPLY_FAILED,
+                                "Smart Apply stuck: $reason", currentUrl)
+                            recordFailed(job, "Smart Apply: $reason")
+                            return false
+                        }
+                    } else {
+                        stuckCount = 0
+                        lastStuckKey = stuckKey
+                    }
+                }
 
                 // 3. Handle the action
                 when {

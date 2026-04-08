@@ -47,4 +47,5 @@ message UserPreferencesProto {
     int32 scan_lookback_days = 39;
     int32 easy_apply_max_attempts = 40;
     bool smart_apply_mode = 41;
+    string smart_apply_model = 42;
 }

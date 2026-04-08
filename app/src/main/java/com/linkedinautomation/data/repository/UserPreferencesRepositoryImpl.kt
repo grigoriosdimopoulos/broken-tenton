@@ -99,7 +99,8 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             else -> 1                   // 0 = proto default (never set) → 1 day
         },
         easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5,
-        smartApplyMode = smartApplyMode
+        smartApplyMode = smartApplyMode,
+        smartApplyModel = smartApplyModel.ifBlank { "claude-haiku-4-5-20251001" }
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =
@@ -145,5 +146,6 @@ class UserPreferencesRepositoryImpl @Inject constructor(
             .setScanLookbackDays(scanLookbackDays)
             .setEasyApplyMaxAttempts(easyApplyMaxAttempts)
             .setSmartApplyMode(smartApplyMode)
+            .setSmartApplyModel(smartApplyModel)
             .build()
 }

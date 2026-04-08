@@ -309,9 +309,11 @@ fun SettingsJobPrefsScreen(
     var minSalary by remember(prefs) { mutableStateOf(prefs?.minSalary ?: 0) }
     var scanLookbackDays by remember(prefs) { mutableStateOf(prefs?.scanLookbackDays ?: 1) }
     var easyApplyMaxAttempts by remember(prefs) { mutableStateOf(prefs?.easyApplyMaxAttempts ?: 5) }
+    var smartApplyModel by remember(prefs) { mutableStateOf(prefs?.smartApplyModel ?: "claude-haiku-4-5-20251001") }
     var salaryExpanded by remember { mutableStateOf(false) }
     var lookbackExpanded by remember { mutableStateOf(false) }
     var attemptsExpanded by remember { mutableStateOf(false) }
+    var modelExpanded by remember { mutableStateOf(false) }
 
     val salaryOptions = listOf(
         0 to "No minimum",
@@ -431,6 +433,32 @@ fun SettingsJobPrefsScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+                if (prefs?.smartApplyMode == true) {
+                    Spacer(Modifier.height(8.dp))
+                    val modelOptions = listOf(
+                        "claude-haiku-4-5-20251001" to "Haiku (fast, cheap ~$0.01/job)",
+                        "claude-sonnet-4-6" to "Sonnet (smarter, ~$0.04/job)"
+                    )
+                    val modelLabel = modelOptions.firstOrNull { it.first == smartApplyModel }?.second ?: "Haiku (fast, cheap ~$0.01/job)"
+                    ExposedDropdownMenuBox(expanded = modelExpanded, onExpandedChange = { modelExpanded = it }) {
+                        OutlinedTextField(
+                            value = modelLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("AI Model") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            supportingText = { Text("Haiku is 12× cheaper and fast enough for form navigation") }
+                        )
+                        ExposedDropdownMenu(expanded = modelExpanded, onDismissRequest = { modelExpanded = false }) {
+                            modelOptions.forEach { (value, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    smartApplyModel = value; modelExpanded = false
+                                })
+                            }
+                        }
+                    }
+                }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 val attemptsOptions = (1..10).map { it to "$it attempt${if (it == 1) "" else "s"}" }
                 val attemptsLabel = attemptsOptions.firstOrNull { it.first == easyApplyMaxAttempts }?.second ?: "5 attempts"
@@ -476,7 +504,7 @@ fun SettingsJobPrefsScreen(
                 location, remoteOnly, hybridOk, onsiteOk,
                 exclKw.split(",").map { it.trim() }.filter { it.isNotBlank() },
                 exclCo.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                minSalary, scanLookbackDays, easyApplyMaxAttempts
+                minSalary, scanLookbackDays, easyApplyMaxAttempts, smartApplyModel
             )
             onBack()
         }, modifier = Modifier.fillMaxWidth()) { Text("Save") }

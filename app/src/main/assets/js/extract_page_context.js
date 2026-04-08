@@ -12,7 +12,7 @@
 
     var buttons = [];
     var btnEls = document.querySelectorAll('button, input[type=submit], input[type=button], [role=button], a[role=button]');
-    for (var i = 0; i < btnEls.length && buttons.length < 20; i++) {
+    for (var i = 0; i < btnEls.length && buttons.length < 12; i++) {
       var b = btnEls[i];
       if (b.disabled) continue;
       var txt = (b.innerText || b.value || b.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ');
@@ -22,7 +22,7 @@
 
     var inputs = [];
     var inpEls = document.querySelectorAll('input, textarea, select');
-    for (var j = 0; j < inpEls.length && inputs.length < 20; j++) {
+    for (var j = 0; j < inpEls.length && inputs.length < 12; j++) {
       var inp = inpEls[j];
       if (inp.type === 'hidden') continue;
       var lbl = '';
@@ -33,7 +33,7 @@
       if (!lbl) lbl = inp.getAttribute('aria-label') || inp.placeholder || inp.name || '';
       var opts = [];
       if (inp.tagName === 'SELECT') {
-        for (var k = 0; k < Math.min(inp.options.length, 12); k++) {
+        for (var k = 0; k < Math.min(inp.options.length, 6); k++) {
           opts.push({ val: inp.options[k].value, txt: inp.options[k].text.trim() });
         }
       }
@@ -68,7 +68,7 @@
       hasModal: hasModal,
       buttons:  buttons,
       inputs:   inputs,
-      body:     (document.body ? document.body.innerText : '').replace(/\s+/g,' ').substring(0, 800)
+      body:     (document.body ? document.body.innerText : '').replace(/\s+/g,' ').substring(0, 400)
     };
 
     AndroidBridge.onResult('extract_ctx', JSON.stringify(ctx));
