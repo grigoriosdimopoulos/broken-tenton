@@ -76,7 +76,7 @@ class SettingsViewModel @Inject constructor(
         excludeKeywords: List<String>, excludeCompanies: List<String>,
         minSalary: Int = 0, scanLookbackDays: Int = 1,
         easyApplyMaxAttempts: Int = 5,
-        smartApplyModel: String = "claude-haiku-4-5-20251001"
+        smartApplyModel: String = "claude-sonnet-4-6"
     ) {
         viewModelScope.launch {
             val current = prefsRepo.get()

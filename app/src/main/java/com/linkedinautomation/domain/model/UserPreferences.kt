@@ -57,5 +57,5 @@ data class UserPreferences(
     // When true, Claude drives ALL navigation instead of hardcoded JS selectors
     val smartApplyMode: Boolean = false,
     // Claude model used for SmartApply (default = Haiku for cost efficiency)
-    val smartApplyModel: String = "claude-haiku-4-5-20251001"
+    val smartApplyModel: String = "claude-sonnet-4-6"
 )

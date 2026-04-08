@@ -100,7 +100,7 @@ class UserPreferencesRepositoryImpl @Inject constructor(
         },
         easyApplyMaxAttempts = if (easyApplyMaxAttempts > 0) easyApplyMaxAttempts else 5,
         smartApplyMode = smartApplyMode,
-        smartApplyModel = smartApplyModel.ifBlank { "claude-haiku-4-5-20251001" }
+        smartApplyModel = smartApplyModel.ifBlank { "claude-sonnet-4-6" }
     )
 
     private fun UserPreferences.toProto(): com.linkedinautomation.UserPreferencesProto =

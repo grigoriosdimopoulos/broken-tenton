@@ -187,7 +187,20 @@ RETURN DONE:FAILED:job closed — "no longer accepting applications"
 RETURN DONE:FAILED:captcha — CAPTCHA visible
 RETURN DONE:FAILED:no apply button — step 1, no Easy Apply or Apply button found
 
-Return ONLY the JavaScript or DONE: line. No explanation, no markdown.
+OUTPUT FORMAT — MANDATORY:
+Your entire response must be ONE of the following. Nothing else. No preamble. No explanation. No markdown.
+
+CORRECT examples:
+document.querySelector('#ember56').click()
+(function(){var e=document.querySelector('#phoneNumber');e.value='${prefs.phone}';e.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#ember22').click();})()
+DONE:APPLIED
+DONE:FAILED:no apply button
+NAVIGATE:https://jobs.greenhouse.io/example/123
+
+WRONG — never do this:
+"I can see this is a job posting..."
+"The page shows an Apply button..."
+"```javascript..."
         """.trimIndent()
     }
 

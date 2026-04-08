@@ -433,14 +433,28 @@ class AutomationOrchestrator @Inject constructor(
                     action.isBlank() -> {
                         log("SmartApply step $step: Claude returned empty action, skipping")
                     }
+                    looksLikeExplanation(action) -> {
+                        // Claude returned text narration instead of JavaScript.
+                        // Log and skip — don't execute garbage JS.
+                        log("SmartApply step $step: Claude returned explanation instead of JS — skipping (response: ${action.take(80)})")
+                        activityRepo.log(ActivityAction.EASY_APPLY_STEP,
+                            "SmartApply step $step: bad response (not JS): ${action.take(200)}", currentUrl)
+                    }
                     else -> {
-                        // Execute Claude's JavaScript wrapped with a bridge callback
+                        // Execute Claude's JavaScript via new Function() so syntax errors
+                        // are caught at runtime (not parse-time), ensuring AndroidBridge.onResult
+                        // is always called and runJs never times out from a bad response.
+                        val encodedAction = action
+                            .replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\n", "\\n")
+                            .replace("\r", "\\r")
                         val wrappedJs = """
 (function(){
   try {
-    ${action}
+    (new Function("$encodedAction"))();
   } catch(e) {
-    // ignore minor JS errors — page may still have updated
+    // ignore JS errors — page may still have updated
   }
   setTimeout(function(){
     try { AndroidBridge.onResult('nav_$step','done'); } catch(e2){}
@@ -451,8 +465,8 @@ class AutomationOrchestrator @Inject constructor(
                         runCatching {
                             engine.runJs("nav_$step", wrappedJs, 12_000)
                         }.onFailure { e ->
-                            // Timeout usually means a page navigation happened — that's fine
-                            log("SmartApply step $step: JS timeout (likely navigated) — ${e.message}")
+                            // Timeout means a page navigation happened (new page didn't call onResult)
+                            log("SmartApply step $step: JS timeout (page navigated) — ${e.message}")
                             delay(2000) // let new page load
                         }
                     }
@@ -983,6 +997,28 @@ class AutomationOrchestrator @Inject constructor(
             )
         )
         activityRepo.log(ActivityAction.APPLICATION_FAILED, "${job.title}: $reason")
+    }
+
+    /**
+     * Returns true if Claude returned an explanatory text response instead of JavaScript.
+     * Haiku in particular sometimes narrates what it sees rather than emitting code.
+     */
+    private fun looksLikeExplanation(action: String): Boolean {
+        val jsStarters = listOf(
+            "document.", "(function", "function ", "var ", "let ", "const ",
+            "window.", "location.", "history.", "navigator.",
+            "DONE:", "NAVIGATE:", "(",
+            "document[", "arguments", "return ", "if (", "if(", "try {"
+        )
+        val trimmed = action.trimStart()
+        if (jsStarters.any { trimmed.startsWith(it) }) return false
+        // Sentence-like responses starting with capital I/The/This/Click/Fill etc.
+        val explanationWords = listOf(
+            "I ", "I'm ", "The ", "This ", "There ", "Click ", "Fill ",
+            "Looking ", "Based ", "Since ", "It ", "We ", "You ",
+            "Step ", "Now ", "First ", "Next ", "Let ", "Please "
+        )
+        return explanationWords.any { trimmed.startsWith(it) }
     }
 
     private fun getSources(prefs: UserPreferences): List<JobSource> = when (prefs.sourceMode) {

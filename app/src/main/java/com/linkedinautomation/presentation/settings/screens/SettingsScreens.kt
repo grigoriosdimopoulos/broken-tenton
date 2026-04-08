@@ -436,10 +436,10 @@ fun SettingsJobPrefsScreen(
                 if (prefs?.smartApplyMode == true) {
                     Spacer(Modifier.height(8.dp))
                     val modelOptions = listOf(
-                        "claude-haiku-4-5-20251001" to "Haiku (fast, cheap ~$0.01/job)",
-                        "claude-sonnet-4-6" to "Sonnet (smarter, ~$0.04/job)"
+                        "claude-sonnet-4-6" to "Sonnet (recommended, ~$0.04/job)",
+                        "claude-haiku-4-5-20251001" to "Haiku (cheap ~$0.01/job, less reliable)"
                     )
-                    val modelLabel = modelOptions.firstOrNull { it.first == smartApplyModel }?.second ?: "Haiku (fast, cheap ~$0.01/job)"
+                    val modelLabel = modelOptions.firstOrNull { it.first == smartApplyModel }?.second ?: "Sonnet (recommended, ~$0.04/job)"
                     ExposedDropdownMenuBox(expanded = modelExpanded, onExpandedChange = { modelExpanded = it }) {
                         OutlinedTextField(
                             value = modelLabel,
@@ -448,7 +448,7 @@ fun SettingsJobPrefsScreen(
                             label = { Text("AI Model") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(),
-                            supportingText = { Text("Haiku is 12× cheaper and fast enough for form navigation") }
+                            supportingText = { Text("Sonnet reliably outputs JavaScript. Haiku is cheaper but may narrate instead of act.") }
                         )
                         ExposedDropdownMenu(expanded = modelExpanded, onDismissRequest = { modelExpanded = false }) {
                             modelOptions.forEach { (value, label) ->
