@@ -117,12 +117,12 @@ class VisibleApplyViewModel @Inject constructor(
             _statusText.value = "Step $step — reading page…"
             addLog("── Step $step ──")
 
-            val pageCtx = runCatching {
-                eng.runJs("ctx_$step", contextScript, 8_000)
-            }.getOrElse { e ->
-                addLog("Page context error: ${e.message?.take(80)}")
+            val pageCtxResult = runCatching { eng.runJs("ctx_$step", contextScript, 8_000) }
+            if (pageCtxResult.isFailure) {
+                addLog("Page context error: ${pageCtxResult.exceptionOrNull()?.message?.take(80)}")
                 break
             }
+            val pageCtx = pageCtxResult.getOrThrow()
 
             _statusText.value = "Step $step — asking Claude…"
             val action = claudeNavigator.getNextAction(
