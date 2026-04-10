@@ -143,10 +143,8 @@ fun VisibleAutomationScreen(
                                 "(KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
                         }
                         // Reuse LinkedIn session cookies from the login screen
-                        CookieManager.getInstance().apply {
-                            setAcceptCookie(true)
-                            setAcceptThirdPartyCookies(this@apply, true)
-                        }
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         viewModel.attachWebView(this, ctx)
                     }
                 },
