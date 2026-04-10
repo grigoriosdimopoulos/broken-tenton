@@ -1,6 +1,7 @@
 package com.linkedinautomation.presentation.visibleapply
 
 import android.annotation.SuppressLint
+import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -140,6 +141,11 @@ fun VisibleAutomationScreen(
                             userAgentString =
                                 "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                                 "(KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+                        }
+                        // Reuse LinkedIn session cookies from the login screen
+                        CookieManager.getInstance().apply {
+                            setAcceptCookie(true)
+                            setAcceptThirdPartyCookies(this@apply, true)
                         }
                         viewModel.attachWebView(this, ctx)
                     }

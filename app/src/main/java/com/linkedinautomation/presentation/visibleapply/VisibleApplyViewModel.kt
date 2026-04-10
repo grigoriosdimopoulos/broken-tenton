@@ -13,12 +13,14 @@ import com.linkedinautomation.domain.repository.JobApplicationRepository
 import com.linkedinautomation.domain.repository.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,14 +66,18 @@ class VisibleApplyViewModel @Inject constructor(
     fun attachWebView(wv: WebView, activityCtx: Context) {
         viewModelScope.launch {
             val prefs = prefsRepo.get()
-            engine = AutomationWebEngine(
-                context = activityCtx,
-                sourceMode = prefs.sourceMode,
-                onLog = { msg -> addLog(msg) },
-                onBlockedNavigation = { /* apply mode bypasses URL allowlist */ },
-                onFileChooserRequested = { callback -> callback(resumePath()) }
-            ).also { it.createWithExistingWebView(wv) }
-            _engineReady.value = true
+            // WebView settings must be set on the Main thread — prefsRepo.get() may resume
+            // on a DataStore/IO thread, so we switch back to Main explicitly.
+            withContext(Dispatchers.Main) {
+                engine = AutomationWebEngine(
+                    context = activityCtx,
+                    sourceMode = prefs.sourceMode,
+                    onLog = { msg -> addLog(msg) },
+                    onBlockedNavigation = { /* apply mode bypasses URL allowlist */ },
+                    onFileChooserRequested = { callback -> callback(resumePath()) }
+                ).also { it.createWithExistingWebView(wv) }
+                _engineReady.value = true
+            }
         }
     }
 
