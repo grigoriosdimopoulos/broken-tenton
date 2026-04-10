@@ -71,6 +71,20 @@ class AutomationWebEngine(
         // Foreground Service context (hardware-accelerated views render blank).
         // Must be set BEFORE any content loads — setting it just before draw() is too late.
         wv.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+        configureWebView(wv)
+    }
+
+    /**
+     * Attaches to an existing WebView (e.g. created by a Compose AndroidView in Activity context).
+     * Does NOT set LAYER_TYPE_SOFTWARE — an Activity-attached View uses hardware acceleration,
+     * which renders correctly and is actually preferred for the visible apply screen.
+     */
+    fun createWithExistingWebView(wv: WebView) {
+        webView = wv
+        configureWebView(wv)
+    }
+
+    private fun configureWebView(wv: WebView) {
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -93,11 +107,11 @@ class AutomationWebEngine(
                 pendingCallbacks.remove(tag)?.invoke("__error__:$error")
             }
             override fun onFileChooserRequested(callback: (String?) -> Unit) {
-                onFileChooserRequested(callback)
+                this@AutomationWebEngine.onFileChooserRequested(callback)
             }
             override fun onBlockedNavigation(url: String) {
                 onLog("BLOCKED: $url")
-                onBlockedNavigation(url)
+                this@AutomationWebEngine.onBlockedNavigation(url)
             }
         })
         wv.addJavascriptInterface(bridge, "AndroidBridge")
@@ -109,8 +123,8 @@ class AutomationWebEngine(
                 if (applyModeEnabled) return false
                 if (!UrlAllowlist.isAllowed(url, sourceMode)) {
                     if (UrlAllowlist.isBlockedLinkedInUrl(url)) {
-                        bridge.log("Blocked navigation to: $url")
-                        onBlockedNavigation(url)
+                        onLog("Blocked navigation to: $url")
+                        this@AutomationWebEngine.onBlockedNavigation(url)
                     }
                     return true // block
                 }
@@ -129,7 +143,7 @@ class AutomationWebEngine(
                 filePathCallback: ValueCallback<Array<android.net.Uri>>,
                 fileChooserParams: FileChooserParams
             ): Boolean {
-                onFileChooserRequested { path ->
+                this@AutomationWebEngine.onFileChooserRequested { path ->
                     if (path != null) {
                         val uri = android.net.Uri.fromFile(java.io.File(path))
                         filePathCallback.onReceiveValue(arrayOf(uri))

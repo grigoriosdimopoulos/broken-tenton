@@ -41,4 +41,15 @@ sealed class Screen(val route: String) {
     object ActivityDetail : Screen("activity/{logId}") {
         fun route(logId: Long) = "activity/$logId"
     }
+
+    // Visible (Selenium-style) apply screen
+    object VisibleAutomation : Screen("automation/visual?jobId={jobId}&jobUrl={jobUrl}&jobTitle={jobTitle}&company={company}") {
+        fun route(jobId: Long, jobUrl: String, jobTitle: String, company: String) = buildString {
+            append("automation/visual")
+            append("?jobId=$jobId")
+            append("&jobUrl=${android.net.Uri.encode(jobUrl)}")
+            append("&jobTitle=${android.net.Uri.encode(jobTitle)}")
+            append("&company=${android.net.Uri.encode(company)}")
+        }
+    }
 }

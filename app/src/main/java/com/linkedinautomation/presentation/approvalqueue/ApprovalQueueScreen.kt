@@ -19,7 +19,10 @@ import com.linkedinautomation.domain.model.JobApplication
 import com.linkedinautomation.domain.model.UserPreferences
 
 @Composable
-fun ApprovalQueueScreen(viewModel: ApprovalQueueViewModel = hiltViewModel()) {
+fun ApprovalQueueScreen(
+    viewModel: ApprovalQueueViewModel = hiltViewModel(),
+    onApplyVisibly: (JobApplication) -> Unit = {}
+) {
     val context = LocalContext.current
     val pending by viewModel.pending.collectAsState(emptyList())
     val prefs by viewModel.prefs.collectAsState(null)
@@ -79,7 +82,7 @@ fun ApprovalQueueScreen(viewModel: ApprovalQueueViewModel = hiltViewModel()) {
                     ApprovalCard(
                         job = job,
                         prefs = prefs,
-                        onApprove = { viewModel.approve(job, context.filesDir) },
+                        onApplyVisibly = { onApplyVisibly(job) },
                         onReject = { viewModel.reject(job.id) }
                     )
                 }
@@ -131,7 +134,7 @@ private fun AddManualJobDialog(onDismiss: () -> Unit, onAdd: (String, String, St
 private fun ApprovalCard(
     job: JobApplication,
     prefs: UserPreferences?,
-    onApprove: () -> Unit,
+    onApplyVisibly: () -> Unit,
     onReject: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -249,13 +252,13 @@ private fun ApprovalCard(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = onApprove,
+                    onClick = onApplyVisibly,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Apply Now")
+                    Text("Apply Visibly")
                 }
                 OutlinedButton(onClick = onReject, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))

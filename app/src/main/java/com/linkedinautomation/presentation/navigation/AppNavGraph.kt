@@ -23,6 +23,7 @@ import com.linkedinautomation.presentation.settings.SettingsViewModel
 import com.linkedinautomation.presentation.settings.screens.*
 import com.linkedinautomation.presentation.setup.SetupViewModel
 import com.linkedinautomation.presentation.setup.screens.*
+import com.linkedinautomation.presentation.visibleapply.VisibleAutomationScreen
 
 @Composable
 fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
@@ -227,7 +228,15 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                     }
                 )
             }
-            composable(Screen.ApprovalQueue.route) { ApprovalQueueScreen() }
+            composable(Screen.ApprovalQueue.route) {
+                ApprovalQueueScreen(
+                    onApplyVisibly = { job ->
+                        navController.navigate(
+                            Screen.VisibleAutomation.route(job.id, job.jobUrl, job.title, job.company)
+                        )
+                    }
+                )
+            }
             composable(Screen.Monitor.route) { MonitorScreen() }
             composable(Screen.History.route) {
                 HistoryScreen(
@@ -295,6 +304,19 @@ fun AppNavGraph(isSetupComplete: Boolean, pendingCount: Int) {
                 arguments = listOf(navArgument("logId") { type = NavType.LongType })
             ) {
                 ActivityDetailScreen(onBack = { navController.popBackStack() })
+            }
+
+            // ── Visible (Selenium-style) Apply Screen ───────────────────
+            composable(
+                route = Screen.VisibleAutomation.route,
+                arguments = listOf(
+                    navArgument("jobId") { type = NavType.LongType; defaultValue = 0L },
+                    navArgument("jobUrl") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("jobTitle") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("company") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) {
+                VisibleAutomationScreen(onBack = { navController.popBackStack() })
             }
         }
     }
