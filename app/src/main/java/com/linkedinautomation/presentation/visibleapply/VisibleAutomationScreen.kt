@@ -9,11 +9,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,8 +33,6 @@ fun VisibleAutomationScreen(
     val logs by viewModel.logs.collectAsState()
     val isDone by viewModel.isDone.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
-    val context = LocalContext.current
-
     val logListState = rememberLazyListState()
 
     // Navigate back 2 seconds after completion so user can see the result
@@ -94,7 +91,7 @@ fun VisibleAutomationScreen(
                         onBack()
                     }) {
                         Icon(
-                            Icons.Default.Stop,
+                            Icons.Default.Close,
                             contentDescription = "Stop",
                             tint = MaterialTheme.colorScheme.error
                         )

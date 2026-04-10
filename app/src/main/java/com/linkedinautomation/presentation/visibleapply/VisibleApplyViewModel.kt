@@ -9,7 +9,6 @@ import com.linkedinautomation.automation.ai.ClaudePageNavigator
 import com.linkedinautomation.automation.engine.AutomationWebEngine
 import com.linkedinautomation.automation.scripts.JsScriptLoader
 import com.linkedinautomation.domain.model.ApplicationStatus
-import com.linkedinautomation.domain.model.SourceMode
 import com.linkedinautomation.domain.repository.JobApplicationRepository
 import com.linkedinautomation.domain.repository.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
