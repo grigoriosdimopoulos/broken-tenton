@@ -58,9 +58,9 @@ fun LinkedInLoginScreen(
                             loadWithOverviewMode = true
                             useWideViewPort = true
                             setSupportZoom(false)
-                            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+                            userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) " +
                                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                                "Chrome/121.0.0.0 Mobile Safari/537.36"
+                                "Chrome/137.0.0.0 Mobile Safari/537.36"
                         }
                         val cookieManager = CookieManager.getInstance()
                         cookieManager.setAcceptCookie(true)
@@ -93,7 +93,43 @@ fun LinkedInLoginScreen(
                                 return false // let WebView follow the redirect
                             }
                         }
-                        loadUrl("https://www.linkedin.com/login")
+
+                        // Popups (window.open / target=_blank, e.g. "Sign in with Google")
+                        // must load in THIS WebView — with no handler the tap dead-ends.
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onCreateWindow(
+                                view: WebView?, isDialog: Boolean,
+                                isUserGesture: Boolean, resultMsg: android.os.Message?
+                            ): Boolean {
+                                if (resultMsg == null) return false
+                                val transport = resultMsg.obj
+                                        as? WebView.WebViewTransport ?: return false
+                                // Temporary WebView just to capture the popup URL,
+                                // then redirect it into the main WebView
+                                val temp = WebView(ctx)
+                                temp.webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        v: WebView?,
+                                        request: android.webkit.WebResourceRequest?
+                                    ): Boolean {
+                                        request?.url?.toString()?.let { view?.loadUrl(it) }
+                                        temp.post { temp.destroy() }
+                                        return true
+                                    }
+                                }
+                                transport.webView = temp
+                                resultMsg.sendToTarget()
+                                return true
+                            }
+                        }
+
+                        // Start from a clean slate: stale/expired session cookies make
+                        // linkedin.com/login redirect into a checkpoint that renders as
+                        // a blank white page. Clear them, then load the login page.
+                        cookieManager.removeAllCookies {
+                            cookieManager.flush()
+                            loadUrl("https://www.linkedin.com/login")
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize()

@@ -139,8 +139,8 @@ fun VisibleAutomationScreen(
                             // WebView is detached while they are animating out
                             setSupportZoom(false)
                             userAgentString =
-                                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
-                                "(KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+                                "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
+                                "(KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
                         }
                         // Reuse LinkedIn session cookies from the login screen
                         CookieManager.getInstance().setAcceptCookie(true)
