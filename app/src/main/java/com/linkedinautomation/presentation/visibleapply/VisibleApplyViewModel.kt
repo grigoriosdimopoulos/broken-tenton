@@ -1,6 +1,7 @@
 package com.linkedinautomation.presentation.visibleapply
 
 import android.content.Context
+import android.webkit.CookieManager
 import android.webkit.WebView
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -8,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.linkedinautomation.automation.ai.ClaudePageNavigator
 import com.linkedinautomation.automation.engine.AutomationWebEngine
 import com.linkedinautomation.automation.scripts.JsScriptLoader
+import com.linkedinautomation.automation.scripts.ScriptRegistry
 import com.linkedinautomation.domain.model.ApplicationStatus
 import com.linkedinautomation.domain.repository.JobApplicationRepository
 import com.linkedinautomation.domain.repository.UserPreferencesRepository
@@ -83,14 +85,27 @@ class VisibleApplyViewModel @Inject constructor(
 
     /** Called from screen's LaunchedEffect(engineReady) once the engine is ready. */
     fun startApply() {
+        if (applyJob?.isActive == true) return
         val eng = engine ?: return
         applyJob = viewModelScope.launch {
-            runApplyLoop(eng)
+            // Nothing inside the loop may crash the app — surface errors in the status bar
+            try {
+                runApplyLoop(eng)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                addLog("Error: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
+                _statusText.value = "Error: ${e.message?.take(80) ?: e.javaClass.simpleName}"
+                runCatching { jobRepo.updateStatus(jobId, ApplicationStatus.FAILED) }
+                _isDone.value = true
+            }
         }
     }
 
     fun cancel() {
         applyJob?.cancel()
+        // Do NOT destroy the WebView here — it is still attached to the composition;
+        // destroying an attached WebView crashes. The engine only clears its callbacks.
         engine?.destroy()
         engine = null
     }
@@ -110,12 +125,28 @@ class VisibleApplyViewModel @Inject constructor(
             return
         }
 
+        // Restore the stored LinkedIn session before loading any linkedin.com page —
+        // same injection the background scan flow uses.
+        if (prefs.linkedInCookies.isNotBlank()) {
+            withContext(Dispatchers.Main) {
+                val cm = CookieManager.getInstance()
+                cm.setAcceptCookie(true)
+                prefs.linkedInCookies.split(";").map { it.trim() }.filter { it.isNotBlank() }
+                    .forEach { cookie ->
+                        cm.setCookie(".linkedin.com", cookie)
+                        cm.setCookie("https://www.linkedin.com", cookie)
+                    }
+                cm.flush()
+            }
+            addLog("LinkedIn session cookies restored")
+        }
+
         eng.enableApplyMode()
         _statusText.value = "Loading job page…"
         runCatching { eng.navigateTo(jobUrl, timeoutMs = 20_000) }
         delay(1500)
 
-        val contextScript = jsLoader.load("extract_page_context.js")
+        val contextScript = jsLoader.load(ScriptRegistry.EXTRACT_PAGE_CONTEXT)
         var lastFingerprint = ""
         var sameCount = 0
 
@@ -123,23 +154,44 @@ class VisibleApplyViewModel @Inject constructor(
             _statusText.value = "Step $step — reading page…"
             addLog("── Step $step ──")
 
-            val pageCtxResult = runCatching { eng.runJs("ctx_$step", contextScript, 8_000) }
-            if (pageCtxResult.isFailure) {
-                addLog("Page context error: ${pageCtxResult.exceptionOrNull()?.message?.take(80)}")
-                break
+            // Tag MUST match AndroidBridge.onResult('extract_ctx', ...) in the JS
+            val pageCtx = runCatching {
+                eng.runJs("extract_ctx", contextScript, 10_000)
+            }.getOrElse { e ->
+                addLog("Page context error: ${e.message?.take(80)}")
+                "{}"
             }
-            val pageCtx = pageCtxResult.getOrThrow()
 
             _statusText.value = "Step $step — asking Claude…"
-            val action = claudeNavigator.getNextAction(
-                pageContextJson = pageCtx,
-                jobTitle = jobTitle,
-                company = company,
-                step = step,
-                prefs = prefs,
-                apiKey = apiKey
-            )
+            val action = runCatching {
+                claudeNavigator.getNextAction(
+                    pageContextJson = pageCtx,
+                    jobTitle = jobTitle,
+                    company = company,
+                    step = step,
+                    prefs = prefs,
+                    apiKey = apiKey
+                )
+            }.getOrElse { e -> "DONE:FAILED:Claude API error — ${e.message?.take(80)}" }
             addLog(action.take(120))
+
+            // Stuck detection: same action AND same page fingerprint = nothing is changing
+            if (!action.startsWith("DONE:") && action.isNotBlank()) {
+                val fingerprint = action.take(60) + pageCtx.length + pageCtx.take(120)
+                if (fingerprint == lastFingerprint) {
+                    sameCount++
+                    if (sameCount >= 3) {
+                        _statusText.value = "Stuck — page not changing, stopped"
+                        addLog("Stuck — same action repeated $sameCount times")
+                        jobRepo.updateStatus(jobId, ApplicationStatus.FAILED)
+                        _isDone.value = true
+                        return
+                    }
+                } else {
+                    sameCount = 0
+                    lastFingerprint = fingerprint
+                }
+            }
 
             when {
                 action.startsWith("DONE:APPLIED") -> {
@@ -149,8 +201,8 @@ class VisibleApplyViewModel @Inject constructor(
                     _isDone.value = true
                     return
                 }
-                action.startsWith("DONE:FAILED:") -> {
-                    val reason = action.removePrefix("DONE:FAILED:")
+                action.startsWith("DONE:FAILED") -> {
+                    val reason = action.removePrefix("DONE:FAILED:").trim()
                     _statusText.value = "Failed: $reason"
                     addLog("Done — failed: $reason")
                     jobRepo.updateStatus(jobId, ApplicationStatus.FAILED)
@@ -158,30 +210,28 @@ class VisibleApplyViewModel @Inject constructor(
                     return
                 }
                 action.startsWith("NAVIGATE:") -> {
-                    val url = action.removePrefix("NAVIGATE:")
+                    val url = action.removePrefix("NAVIGATE:").trim()
                     _statusText.value = "Step $step — navigating…"
                     runCatching { eng.navigateTo(url, timeoutMs = 20_000) }
                     delay(1500)
                 }
+                action.isBlank() -> {
+                    addLog("Empty action from Claude — skipping step")
+                }
+                looksLikeExplanation(action) -> {
+                    addLog("Claude returned text instead of JS — skipping")
+                }
                 else -> {
-                    // Stuck detection: same action + same page context fingerprint
-                    val fingerprint = action.take(60) + pageCtx.take(60)
-                    if (fingerprint == lastFingerprint) {
-                        sameCount++
-                    } else {
-                        sameCount = 0
-                        lastFingerprint = fingerprint
-                    }
-                    if (sameCount >= 3) {
-                        _statusText.value = "Stuck — stopped after $step steps"
-                        addLog("Stuck — same action repeated $sameCount times")
-                        jobRepo.updateStatus(jobId, ApplicationStatus.FAILED)
-                        _isDone.value = true
-                        return
-                    }
-
                     _statusText.value = "Step $step — executing…"
-                    val result = eng.executeJsAndWaitForNavigation(action)
+                    // Encode as a JSON string so new Function() turns syntax errors
+                    // into catchable runtime errors instead of killing the flow
+                    val encoded = action
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r")
+                    val safeJs = """(function(){try{(new Function("$encoded"))();}catch(e){}})();"""
+                    val result = eng.executeJsAndWaitForNavigation(safeJs, navWaitMs = 4_000)
                     delay(if (result.startsWith("navigated:")) 1500L else 800L)
                 }
             }
@@ -191,6 +241,24 @@ class VisibleApplyViewModel @Inject constructor(
         _statusText.value = "Reached step limit without completing"
         jobRepo.updateStatus(jobId, ApplicationStatus.FAILED)
         _isDone.value = true
+    }
+
+    /** True if Claude returned narrative text instead of JavaScript (mirrors orchestrator). */
+    private fun looksLikeExplanation(action: String): Boolean {
+        val jsStarters = listOf(
+            "document.", "(function", "function ", "var ", "let ", "const ",
+            "window.", "location.", "history.", "navigator.",
+            "DONE:", "NAVIGATE:", "(",
+            "document[", "arguments", "return ", "if (", "if(", "try {"
+        )
+        val trimmed = action.trimStart()
+        if (jsStarters.any { trimmed.startsWith(it) }) return false
+        val explanationWords = listOf(
+            "I ", "I'm ", "The ", "This ", "There ", "Click ", "Fill ",
+            "Looking ", "Based ", "Since ", "It ", "We ", "You ",
+            "Step ", "Now ", "First ", "Next ", "Let ", "Please "
+        )
+        return explanationWords.any { trimmed.startsWith(it) }
     }
 
     private fun addLog(msg: String) {

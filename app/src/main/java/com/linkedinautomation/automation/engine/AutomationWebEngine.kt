@@ -65,8 +65,13 @@ class AutomationWebEngine(
 
     val currentUrl: String? get() = webView?.url
 
+    // False when the WebView was handed to us (Compose AndroidView owns its lifecycle);
+    // destroying a WebView that is still attached to a window crashes.
+    private var ownsWebView = true
+
     fun create() {
         val wv = WebView(context).also { webView = it }
+        ownsWebView = true
         // Software rendering is required for WebView.draw(canvas) to work in a background
         // Foreground Service context (hardware-accelerated views render blank).
         // Must be set BEFORE any content loads — setting it just before draw() is too late.
@@ -81,6 +86,7 @@ class AutomationWebEngine(
      */
     fun createWithExistingWebView(wv: WebView) {
         webView = wv
+        ownsWebView = false
         configureWebView(wv)
     }
 
@@ -275,8 +281,11 @@ class AutomationWebEngine(
     }
 
     fun destroy() {
-        webView?.destroy()
+        if (ownsWebView) {
+            webView?.destroy()
+        }
         webView = null
+        pageLoadedCallback = null
         pendingCallbacks.clear()
         pendingErrors.clear()
     }

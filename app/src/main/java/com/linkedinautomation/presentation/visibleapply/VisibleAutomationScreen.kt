@@ -135,9 +135,9 @@ fun VisibleAutomationScreen(
                             domStorageEnabled = true
                             loadWithOverviewMode = true
                             useWideViewPort = true
-                            setSupportZoom(true)
-                            builtInZoomControls = true
-                            displayZoomControls = false
+                            // No zoom widget — the legacy zoom controls crash if the
+                            // WebView is detached while they are animating out
+                            setSupportZoom(false)
                             userAgentString =
                                 "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                                 "(KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
