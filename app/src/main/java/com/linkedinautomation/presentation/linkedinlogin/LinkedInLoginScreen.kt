@@ -125,11 +125,16 @@ fun LinkedInLoginScreen(
 
                         // Start from a clean slate: stale/expired session cookies make
                         // linkedin.com/login redirect into a checkpoint that renders as
-                        // a blank white page. Clear them, then load the login page.
-                        cookieManager.removeAllCookies {
-                            cookieManager.flush()
+                        // a blank white page. Fire the async clear, then load via the
+                        // WebView's own message queue (post always runs on the main
+                        // looper) so the load is GUARANTEED to fire — never gate it on
+                        // removeAllCookies' callback, which is unreliable and was the
+                        // cause of the permanent white page.
+                        cookieManager.removeAllCookies(null)
+                        cookieManager.flush()
+                        postDelayed({
                             loadUrl("https://www.linkedin.com/login")
-                        }
+                        }, 250L)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
