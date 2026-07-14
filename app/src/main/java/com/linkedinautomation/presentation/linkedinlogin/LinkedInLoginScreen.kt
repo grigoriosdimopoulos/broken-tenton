@@ -125,16 +125,28 @@ fun LinkedInLoginScreen(
 
                         // Start from a clean slate: stale/expired session cookies make
                         // linkedin.com/login redirect into a checkpoint that renders as
-                        // a blank white page. Fire the async clear, then load via the
-                        // WebView's own message queue (post always runs on the main
-                        // looper) so the load is GUARANTEED to fire — never gate it on
-                        // removeAllCookies' callback, which is unreliable and was the
-                        // cause of the permanent white page.
-                        cookieManager.removeAllCookies(null)
-                        cookieManager.flush()
-                        postDelayed({
-                            loadUrl("https://www.linkedin.com/login")
-                        }, 250L)
+                        // a blank page. The clear MUST finish before we load, otherwise
+                        // the old li_at cookie still rides the request (blank page) or the
+                        // async clear wipes the login page's fresh cookies mid-load.
+                        //
+                        // Load only after the clear completes (callback), and post the
+                        // load onto the main looper. A one-shot fallback guarantees the
+                        // page still loads if the callback never fires, so it can never
+                        // hang blank.
+                        val loginUrl = "https://www.linkedin.com/login"
+                        val loaded = java.util.concurrent.atomic.AtomicBoolean(false)
+                        fun loadOnce() {
+                            if (loaded.compareAndSet(false, true)) {
+                                post { loadUrl(loginUrl) }
+                            }
+                        }
+                        cookieManager.removeAllCookies {
+                            cookieManager.flush()
+                            loadOnce()
+                        }
+                        // Fallback: if the removeAllCookies callback doesn't fire within
+                        // 1.2s (happens on some WebView builds), load anyway.
+                        postDelayed({ loadOnce() }, 1_200L)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
