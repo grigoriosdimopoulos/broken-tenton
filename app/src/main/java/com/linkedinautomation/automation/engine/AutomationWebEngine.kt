@@ -100,6 +100,15 @@ class AutomationWebEngine(
             allowFileAccess = false
             allowContentAccess = false
         }
+        // LinkedIn (and Google, etc.) detect embedded WebViews via the X-Requested-With
+        // header and serve stripped pages. Suppress it so pages render normally.
+        runCatching {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(
+                    androidx.webkit.WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                androidx.webkit.WebSettingsCompat.setRequestedWithHeaderOriginAllowList(
+                    wv.settings, emptySet())
+            }
+        }
 
         val bridge = JavaScriptBridge(object : WebEngineCallback {
             override fun onPageLoaded(url: String) {

@@ -99,6 +99,9 @@ fun LinkedInLoginScreen(
                                     "AppleWebKit/537.36 (KHTML, like Gecko) " +
                                     "Chrome/137.0.0.0 Mobile Safari/537.36"
                             }
+                            // LinkedIn strips the login form when it sees the WebView's
+                            // X-Requested-With header (our package name). Suppress it.
+                            suppressRequestedWithHeader(settings)
                             val cookieManager = CookieManager.getInstance()
                             cookieManager.setAcceptCookie(true)
                             cookieManager.setAcceptThirdPartyCookies(this, true)
@@ -233,6 +236,22 @@ private fun forceCleanLoad(webView: WebView?) {
             wv.postDelayed({ go() }, 800L)
         }
     }, 1_500L)
+}
+
+/**
+ * Stops the WebView from sending the X-Requested-With header (which carries the app's
+ * package name). LinkedIn — like Google and others — uses that header to detect embedded
+ * WebViews and serve a stripped page with no login form. An empty allow-list means the
+ * header is sent to no origin. No-op on WebView versions that don't support the API.
+ */
+private fun suppressRequestedWithHeader(settings: android.webkit.WebSettings) {
+    runCatching {
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(
+                androidx.webkit.WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            androidx.webkit.WebSettingsCompat.setRequestedWithHeaderOriginAllowList(
+                settings, emptySet())
+        }
+    }
 }
 
 private fun isLoggedInUrl(url: String): Boolean {

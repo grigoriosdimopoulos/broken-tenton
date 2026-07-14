@@ -58,6 +58,9 @@ protobuf {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Lets us suppress the X-Requested-With header that LinkedIn uses to detect
+    // (and block) embedded WebViews — without it the login form never renders.
+    implementation("androidx.webkit:webkit:1.11.0")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
